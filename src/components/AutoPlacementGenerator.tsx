@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { generateTerrainLayout } from '../terrain/generateTerrainLayout';
 import { getStrategyDescription } from '../terrain/placementStrategies';
 import type {
@@ -13,6 +13,7 @@ interface AutoPlacementGeneratorProps {
   heightInches: number;
   deploymentDepthInches: number;
   onLayoutGenerated: (layout: TerrainLayout) => void;
+  initialConfig?: PlacementConfig;
 }
 
 const STRATEGY_OPTIONS: Array<{ value: PlacementStrategy; label: string }> = [
@@ -35,8 +36,9 @@ export function AutoPlacementGenerator({
   heightInches,
   deploymentDepthInches,
   onLayoutGenerated,
+  initialConfig,
 }: AutoPlacementGeneratorProps) {
-  const [placementConfig, setPlacementConfig] = useState<PlacementConfig>({
+  const [placementConfig, setPlacementConfig] = useState<PlacementConfig>(initialConfig || {
     strategy: 'random',
     density: 'balanced',
     prioritizeCover: false,
@@ -46,6 +48,13 @@ export function AutoPlacementGenerator({
   const [targetPieceCount, setTargetPieceCount] = useState<number>(16);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Sync internal state when initialConfig prop changes (e.g., after loading a saved layout)
+  useEffect(() => {
+    if (initialConfig) {
+      setPlacementConfig(initialConfig);
+    }
+  }, [initialConfig]);
 
   const handleGenerate = () => {
     setIsGenerating(true);

@@ -691,6 +691,7 @@ export function LayoutStudio() {
             heightInches={layout.table.heightInches}
             deploymentDepthInches={layout.table.deploymentDepthInches}
             onLayoutGenerated={handleLayoutGenerated}
+            initialConfig={layout.placementConfig}
           />
 
           <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
