@@ -52,4 +52,21 @@ describe('LayoutStudio', () => {
     expect(screen.getAllByText(/heavy cover/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/print preview/i)).toBeInTheDocument();
   });
+
+  it('renders the terrain summary legend and updates it when traits change', () => {
+    render(<LayoutStudio />);
+
+    expect(screen.getByRole('heading', { name: /terrain summary legend/i })).toBeInTheDocument();
+    expect(screen.getByTestId('terrain-summary-impassable')).toHaveTextContent('1 piece');
+    expect(screen.getByTestId('terrain-summary-hard-cover')).toHaveTextContent('2 pieces');
+    expect(screen.getByTestId('terrain-summary-soft-cover')).toHaveTextContent('4 pieces');
+    expect(screen.getByTestId('terrain-summary-difficult')).toHaveTextContent('3 pieces');
+    expect(screen.getByTestId('terrain-summary-dangerous')).toHaveTextContent('0 pieces');
+    expect(screen.getByTestId('terrain-summary-elevated')).toHaveTextContent('1 piece');
+    expect(screen.getByTestId('terrain-summary-los-blocking')).toHaveTextContent('4 pieces');
+
+    fireEvent.click(screen.getByLabelText(/heavy cover/i));
+
+    expect(screen.getByTestId('terrain-summary-hard-cover')).toHaveTextContent('1 piece');
+  });
 });
