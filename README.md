@@ -22,29 +22,28 @@ A Vite + React + TypeScript battlefield layout planner for One Page Rules style 
 
 Automated deployment lives in `.github/workflows/deploy.yml` and follows the same SSH-based pattern as `uptaclaw/todo-app`.
 
-### Current production path
+### Production target
 
-To avoid clobbering the existing todo app and to keep deployments fully non-interactive, the workflow builds the SPA for `/opr-terrain/` and publishes it to:
+The workflow builds the app with the default root base path and publishes `dist/` into a dedicated static directory:
 
-- `/var/www/todo-app/opr-terrain/`
+- `/var/www/opr-terrain/`
 
-That makes the live app available at:
+With `nginx/default.conf` applied, the live site is served directly from the VM root URL:
 
-- `http://20.69.110.195/opr-terrain/index.html`
-
-Once `nginx/opr-terrain-location.conf` is applied, the cleaner `http://20.69.110.195/opr-terrain/` route works too.
+- `http://20.69.110.195/`
 
 ### GitHub Actions flow
 
 On every push to `main`, the workflow:
 
 1. installs dependencies with `npm ci`
-2. builds the production bundle with `VITE_BASE_PATH=/opr-terrain/`
-3. ensures the remote deploy directory exists over SSH
-4. rsyncs `dist/` to `/var/www/todo-app/opr-terrain/`
-5. verifies the live page responds with the OPR Terrain HTML title at `/opr-terrain/index.html`
+2. builds the production bundle with `npm run build`
+3. ensures `/var/www/opr-terrain` exists over SSH
+4. rsyncs `dist/` to `/var/www/opr-terrain/`
+5. installs the static-only nginx config for that directory and reloads nginx
+6. verifies both the root page title and `/health` response
 
-The same workflow also supports `workflow_dispatch` so the deploy path can be smoke-tested before merge.
+The same workflow also supports `workflow_dispatch` for manual re-runs after the workflow exists on `main`.
 
 ### Required GitHub secrets
 
@@ -58,7 +57,7 @@ Use the same secret names as `todo-app`:
 
 Two nginx configs are included:
 
-- `nginx/default.conf` — dedicated static-only site rooted at `/var/www/opr-terrain` with SPA fallback and no `/api/` proxy block
-- `nginx/opr-terrain-location.conf` — location block for serving OPR Terrain alongside the existing todo app at `/opr-terrain/`
+- `nginx/default.conf` — dedicated static-only site rooted at `/var/www/opr-terrain` with SPA fallback and no `/api/` proxy block. The GitHub Actions workflow writes this config to the VM and reloads nginx on deploy.
+- `nginx/opr-terrain-location.conf` — optional location block for serving the same `/var/www/opr-terrain` build alongside another site at `/opr-terrain/`
 
-The alongside config is what matches the current GitHub Actions deploy path. The dedicated config is ready if you later want OPR Terrain to replace the default site entirely.
+If you ever switch to the alongside route, rebuild with `VITE_BASE_PATH=/opr-terrain/ npm run build` before syncing files so asset URLs stay rooted under `/opr-terrain/`.
