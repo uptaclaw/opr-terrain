@@ -1,0 +1,106 @@
+import { createDefaultLayout } from '../data/terrainCatalog';
+import {
+  decodeLayoutHash,
+  encodeLayoutHash,
+  loadSavedLayouts,
+  loadWorkingLayout,
+  persistSavedLayouts,
+  persistWorkingLayout,
+  SAVED_LAYOUTS_STORAGE_KEY,
+  WORKING_LAYOUT_STORAGE_KEY,
+} from './layout';
+
+describe('layout helpers', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.history.replaceState(window.history.state, '', '/');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('round-trips a layout through the share hash serializer', () => {
+    const layout = createDefaultLayout();
+    layout.table.title = 'Hash Test';
+    layout.pieces[0].x = 31.5;
+    layout.pieces[0].traits[0].active = false;
+
+    const decoded = decodeLayoutHash(encodeLayoutHash(layout));
+
+    expect(decoded).not.toBeNull();
+    expect(decoded?.table.title).toBe('Hash Test');
+    expect(decoded?.pieces[0].x).toBe(31.5);
+    expect(decoded?.pieces[0].traits[0].active).toBe(false);
+  });
+
+  it('persists and reloads the working draft layout from localStorage', () => {
+    const layout = createDefaultLayout();
+    layout.pieces[1].y = 22;
+
+    expect(persistWorkingLayout(layout)).toBe(true);
+
+    expect(window.localStorage.getItem(WORKING_LAYOUT_STORAGE_KEY)).toBeTruthy();
+    expect(loadWorkingLayout()?.pieces[1].y).toBe(22);
+  });
+
+  it('persists saved layouts and returns them sorted by latest update', () => {
+    const first = createDefaultLayout();
+    first.table.title = 'Alpha';
+    const second = createDefaultLayout();
+    second.table.title = 'Bravo';
+
+    expect(
+      persistSavedLayouts([
+        {
+          id: 'a',
+          name: 'Alpha',
+          createdAt: '2026-04-01T10:00:00.000Z',
+          updatedAt: '2026-04-01T10:00:00.000Z',
+          layout: first,
+        },
+        {
+          id: 'b',
+          name: 'Bravo',
+          createdAt: '2026-04-01T10:00:00.000Z',
+          updatedAt: '2026-04-02T10:00:00.000Z',
+          layout: second,
+        },
+      ]),
+    ).toBe(true);
+
+    expect(window.localStorage.getItem(SAVED_LAYOUTS_STORAGE_KEY)).toBeTruthy();
+    expect(loadSavedLayouts().map((savedLayout) => savedLayout.name)).toEqual(['Bravo', 'Alpha']);
+  });
+
+  it('fails gracefully when the working draft cannot be persisted', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('Storage disabled');
+    });
+
+    expect(persistWorkingLayout(createDefaultLayout())).toBe(false);
+    expect(loadWorkingLayout()).toBeNull();
+  });
+
+  it('fails gracefully when named layouts cannot be persisted', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('Storage disabled');
+    });
+
+    const layout = createDefaultLayout();
+    layout.table.title = 'Unavailable storage';
+
+    expect(
+      persistSavedLayouts([
+        {
+          id: 'blocked',
+          name: 'Unavailable storage',
+          createdAt: '2026-04-01T10:00:00.000Z',
+          updatedAt: '2026-04-01T10:00:00.000Z',
+          layout,
+        },
+      ]),
+    ).toBe(false);
+    expect(loadSavedLayouts()).toEqual([]);
+  });
+});
