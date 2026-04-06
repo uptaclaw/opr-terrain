@@ -11,6 +11,7 @@ import {
 } from '../lib/layout';
 import type { LayoutState, SavedLayoutRecord, TerrainPiece, TerrainTrait } from '../types/layout';
 import { formatInches, formatTableMeasure, getSceneSize, TableCanvas } from './TableCanvas';
+import { OPRInsightsPanel } from './OPRInsightsPanel';
 
 type DragState = {
   pieceId: string;
@@ -643,6 +644,21 @@ export function LayoutStudio() {
 
       <section className="screen-only grid gap-6 xl:grid-cols-[20rem_minmax(0,1fr)_20rem]">
         <aside className="flex flex-col gap-6">
+          {/* OPR Insights Panel */}
+          <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-white">OPR Setup Insights</h2>
+              <p className="mt-1 text-sm text-slate-300">
+                Real-time validation against official OPR terrain guidelines.
+              </p>
+            </div>
+            <OPRInsightsPanel
+              pieces={layout.pieces}
+              tableWidthInches={layout.table.widthInches}
+              tableHeightInches={layout.table.heightInches}
+              deploymentDepthInches={layout.table.deploymentDepthInches}
+            />
+          </section>
           <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
             <div className="flex items-start justify-between gap-4">
               <div>

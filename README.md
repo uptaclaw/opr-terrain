@@ -5,11 +5,29 @@ A Vite + React + TypeScript battlefield layout planner for One Page Rules style 
 ## Features
 
 - Drag-and-drop terrain layout editor on a gridded tabletop canvas
+- **OPR setup validation** — Real-time insights and recommendations based on official OPR Age of Fantasy guidelines
 - Named layout save/load with rename and delete via `localStorage`
 - Auto-saved working draft restored after refresh
 - Shareable URLs that encode the full layout in the hash
 - Clean PNG export for posting layouts elsewhere
 - Print-friendly sheet with visual map plus terrain legend and active traits
+
+## OPR Setup Insights
+
+The app now includes real-time validation against official OPR terrain recommendations:
+
+- **Terrain Density** — Percentage of table coverage (20-40% recommended)
+- **LoS Blockers** — Number of line-of-sight blocking pieces (4-6 recommended)
+- **Cover Balance** — Mix of Light vs Heavy Cover (aim for 50/50)
+- **Deployment Clarity** — Keep deployment zones clear (max 2 pieces)
+- **Center Balance** — Contested center terrain for objective play (1-3 pieces)
+
+Each metric provides:
+- ✓ Good / ⚠ Warning / ✗ Poor status indicators
+- Actionable suggestions when improvements are needed
+- Overall setup quality score (0-100)
+
+See [OPR Guidelines Documentation](docs/OPR_GUIDELINES.md) for detailed information.
 
 ## Scripts
 
