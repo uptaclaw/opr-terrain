@@ -87,6 +87,32 @@ const normalizeTable = (value: unknown): TableSettings => {
   };
 };
 
+const normalizePlacementConfig = (value: unknown) => {
+  if (!isObject(value)) {
+    return undefined;
+  }
+
+  const strategy = value.strategy;
+  const density = value.density;
+
+  return {
+    ...(strategy === 'random' ||
+      strategy === 'balanced-coverage' ||
+      strategy === 'symmetrical' ||
+      strategy === 'asymmetric' ||
+      strategy === 'clustered-zones' ||
+      strategy === 'los-blocking-lanes'
+      ? { strategy }
+      : {}),
+    ...(density === 'sparse' || density === 'balanced' || density === 'dense' ? { density } : {}),
+    ...(typeof value.prioritizeCover === 'boolean' ? { prioritizeCover: value.prioritizeCover } : {}),
+    ...(typeof value.deploymentZoneSafety === 'boolean'
+      ? { deploymentZoneSafety: value.deploymentZoneSafety }
+      : {}),
+    ...(typeof value.forceSymmetry === 'boolean' ? { forceSymmetry: value.forceSymmetry } : {}),
+  };
+};
+
 export const normalizeLayout = (value: unknown): LayoutState | null => {
   if (!isObject(value)) {
     return null;
@@ -96,10 +122,13 @@ export const normalizeLayout = (value: unknown): LayoutState | null => {
     ? value.pieces.map(normalizePiece).filter((piece): piece is TerrainPiece => piece !== null)
     : [];
 
+  const placementConfig = normalizePlacementConfig(value.placementConfig);
+
   return {
     version: 1,
     table: normalizeTable(value.table),
     pieces,
+    ...(placementConfig && Object.keys(placementConfig).length > 0 ? { placementConfig } : {}),
   };
 };
 

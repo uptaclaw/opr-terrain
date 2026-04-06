@@ -424,6 +424,29 @@ const tryPlacePiece = (
   }
 
   // For balanced-coverage (and its variants), use quarter-based placement
+  // If forceSymmetry is enabled with balanced-coverage, apply mirroring
+  if (strategy === 'balanced-coverage' && placementConfig?.forceSymmetry) {
+    // Apply symmetry similar to the symmetrical strategy
+    if (originalIndex !== undefined && totalPieces !== undefined) {
+      if (originalIndex >= Math.floor(totalPieces / 2)) {
+        const mirrorIndex = originalIndex - Math.floor(totalPieces / 2);
+        const originalMirrorPiece = originalPieceOrder ? originalPieceOrder[mirrorIndex] : null;
+        if (originalMirrorPiece) {
+          const placedMirrorPiece = placedPieces.find(p => p.id === originalMirrorPiece.id);
+          if (placedMirrorPiece) {
+            const orientation = getDeploymentOrientation(widthInches, heightInches);
+            const axis = orientation === 'vertical' ? 'vertical' : 'horizontal';
+            const mirrored = getMirroredPosition(placedMirrorPiece.x, placedMirrorPiece.y, widthInches, heightInches, axis);
+            
+            if (isPlacementValidAdjusted(mirrored.x, mirrored.y)) {
+              return { ...piece, x: mirrored.x, y: mirrored.y };
+            }
+          }
+        }
+      }
+    }
+  }
+
   if (preferredQuarter === null) {
     return null;
   }

@@ -359,7 +359,7 @@ export function LayoutStudio() {
       const traits: TerrainTrait[] = terrainPiece.traits.map((traitLabel, index) => ({
         id: `${terrainPiece.id}-trait-${index}`,
         label: traitLabel,
-        category: traitLabel.includes('Cover') || traitLabel.includes('LoS') ? 'cover' : 
+        category: traitLabel.includes('Cover') ? 'cover' : 
                   traitLabel === 'Difficult' || traitLabel === 'Dangerous' || traitLabel === 'Impassable' ? 'movement' : 'los',
         active: true,
       }));
