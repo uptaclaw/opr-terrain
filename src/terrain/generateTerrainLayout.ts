@@ -332,6 +332,8 @@ const tryPlacePiece = (
           if (isPlacementValidAdjusted(mirrored.x, mirrored.y)) {
             return { ...piece, x: mirrored.x, y: mirrored.y };
           }
+          // If mirroring fails collision detection, trigger layout retry instead of falling back
+          return null;
         }
       }
     }
@@ -441,6 +443,8 @@ const tryPlacePiece = (
             if (isPlacementValidAdjusted(mirrored.x, mirrored.y)) {
               return { ...piece, x: mirrored.x, y: mirrored.y };
             }
+            // If mirroring fails collision detection, trigger layout retry instead of falling back
+            return null;
           }
         }
       }
