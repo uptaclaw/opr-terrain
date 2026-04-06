@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { TerrainEditor } from './TerrainEditor';
 import { TABLE_SCENE_MARGIN } from './TableCanvas';
+import { TERRAIN_LIBRARY_MIME_TYPE } from './TerrainLibrarySidebar';
 import type { TerrainPiece } from '../terrain/types';
 
 const baseWallPiece: TerrainPiece = {
@@ -32,8 +33,13 @@ const clientPoint = (tableX: number, tableY: number) => ({
   clientY: (TABLE_SCENE_MARGIN.top + tableY) * 10,
 });
 
-const createDataTransfer = () => {
+const createDataTransfer = (
+  options: {
+    hideCustomPayloadDuringDragOver?: boolean;
+  } = {},
+) => {
   const store = new Map<string, string>();
+  let dragPhase: 'dragover' | 'drop' | null = null;
 
   const dataTransfer = {
     dropEffect: 'none',
@@ -51,6 +57,14 @@ const createDataTransfer = () => {
       dataTransfer.types = [...store.keys()];
     },
     getData(format: string) {
+      if (
+        options.hideCustomPayloadDuringDragOver &&
+        dragPhase === 'dragover' &&
+        format === TERRAIN_LIBRARY_MIME_TYPE
+      ) {
+        return '';
+      }
+
       return store.get(format) ?? '';
     },
     setData(format: string, data: string) {
@@ -60,7 +74,12 @@ const createDataTransfer = () => {
     setDragImage() {},
   };
 
-  return dataTransfer as unknown as DataTransfer;
+  return {
+    dataTransfer: dataTransfer as unknown as DataTransfer,
+    setPhase(phase: 'dragover' | 'drop' | null) {
+      dragPhase = phase;
+    },
+  };
 };
 
 const dispatchDragEvent = (
@@ -84,14 +103,16 @@ const dispatchDragEvent = (
   });
 
   fireEvent(element, event);
+
+  return event;
 };
 
 const selectPiece = (container: HTMLElement, pieceId: string, x: number, y: number) => {
-  const hitbox = container.querySelector(
-    `[data-testid="terrain-piece-hitbox"][data-piece-id="${pieceId}"]`,
-  ) as SVGCircleElement;
+  const hitTarget = container.querySelector(
+    `[data-testid="terrain-piece-hit-target"][data-piece-id="${pieceId}"]`,
+  ) as SVGElement;
 
-  fireEvent.mouseDown(hitbox, { button: 0, ...clientPoint(x, y) });
+  fireEvent.mouseDown(hitTarget, { button: 0, ...clientPoint(x, y) });
   fireEvent.mouseUp(window, clientPoint(x, y));
 };
 
@@ -173,18 +194,18 @@ describe('TerrainEditor', () => {
       />,
     );
 
-    const firstHitbox = () =>
+    const firstHitTarget = () =>
       container.querySelector(
-        '[data-testid="terrain-piece-hitbox"][data-piece-id="wall-1"]',
-      ) as SVGCircleElement;
+        '[data-testid="terrain-piece-hit-target"][data-piece-id="wall-1"]',
+      ) as SVGElement;
 
-    fireEvent.mouseDown(firstHitbox(), { button: 0, ...clientPoint(10, 10) });
+    fireEvent.mouseDown(firstHitTarget(), { button: 0, ...clientPoint(10, 10) });
     fireEvent.mouseMove(window, clientPoint(16, 10));
     fireEvent.mouseUp(window, clientPoint(16, 10));
 
     expect(getPiece(container, 'wall-1')).toHaveAttribute('data-piece-x', '16');
 
-    fireEvent.mouseDown(firstHitbox(), { button: 0, ...clientPoint(16, 10) });
+    fireEvent.mouseDown(firstHitTarget(), { button: 0, ...clientPoint(16, 10) });
     fireEvent.mouseMove(window, clientPoint(26, 10));
     fireEvent.mouseUp(window, clientPoint(26, 10));
 
@@ -203,11 +224,14 @@ describe('TerrainEditor', () => {
 
     const libraryItem = screen.getByTestId('library-item-wall');
     const dropzone = screen.getByTestId('table-canvas-dropzone');
-    const dataTransfer = createDataTransfer();
+    const { dataTransfer, setPhase } = createDataTransfer();
 
     fireEvent.dragStart(libraryItem, { dataTransfer });
+    setPhase('dragover');
     dispatchDragEvent(dropzone, 'dragover', dataTransfer, clientPoint(11.4, 13.6));
+    setPhase('drop');
     dispatchDragEvent(dropzone, 'drop', dataTransfer, clientPoint(11.4, 13.6));
+    setPhase(null);
 
     const placedPiece = container.querySelector('[data-testid="terrain-piece"]');
 
@@ -229,15 +253,72 @@ describe('TerrainEditor', () => {
 
     const libraryItem = screen.getByTestId('library-item-wall');
     const dropzone = screen.getByTestId('table-canvas-dropzone');
-    const dataTransfer = createDataTransfer();
+    const { dataTransfer, setPhase } = createDataTransfer();
 
     fireEvent.dragStart(libraryItem, { dataTransfer });
+    setPhase('dragover');
     dispatchDragEvent(dropzone, 'dragover', dataTransfer, clientPoint(11.4, 13.6));
+    setPhase('drop');
     dispatchDragEvent(dropzone, 'drop', dataTransfer, clientPoint(11.4, 13.6));
+    setPhase(null);
 
     const placedPiece = container.querySelector('[data-testid="terrain-piece"]');
 
     expect(Number(placedPiece?.getAttribute('data-piece-x'))).toBeCloseTo(11.4, 3);
     expect(Number(placedPiece?.getAttribute('data-piece-y'))).toBeCloseTo(13.6, 3);
+  });
+
+  it('accepts library drags during dragover even when browsers hide custom payload data until drop', () => {
+    const { container } = render(
+      <TerrainEditor
+        widthInches={48}
+        heightInches={48}
+        deploymentDepthInches={12}
+        initialPieces={[]}
+      />,
+    );
+
+    const libraryItem = screen.getByTestId('library-item-wall');
+    const dropzone = screen.getByTestId('table-canvas-dropzone');
+    const { dataTransfer, setPhase } = createDataTransfer({
+      hideCustomPayloadDuringDragOver: true,
+    });
+
+    fireEvent.dragStart(libraryItem, { dataTransfer });
+    setPhase('dragover');
+    const dragOverEvent = dispatchDragEvent(
+      dropzone,
+      'dragover',
+      dataTransfer,
+      clientPoint(11.4, 13.6),
+    );
+
+    expect(dragOverEvent.defaultPrevented).toBe(true);
+
+    setPhase('drop');
+    dispatchDragEvent(dropzone, 'drop', dataTransfer, clientPoint(11.4, 13.6));
+    setPhase(null);
+
+    expect(container.querySelectorAll('[data-testid="terrain-piece"]')).toHaveLength(1);
+  });
+
+  it('uses piece-shaped interaction targets instead of padded circular hitboxes', () => {
+    const { container } = render(
+      <TerrainEditor
+        widthInches={48}
+        heightInches={48}
+        deploymentDepthInches={12}
+        initialPieces={[baseWallPiece]}
+      />,
+    );
+
+    const hitTarget = container.querySelector(
+      '[data-testid="terrain-piece-hit-target"][data-piece-id="wall-1"]',
+    );
+
+    expect(hitTarget?.tagName.toLowerCase()).toBe('rect');
+    expect(hitTarget).toHaveAttribute('width', '8');
+    expect(hitTarget).toHaveAttribute('height', '2');
+    expect(hitTarget).not.toHaveAttribute('r');
   });
 });

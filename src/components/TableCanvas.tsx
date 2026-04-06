@@ -54,6 +54,13 @@ interface GeometryStyle {
   pointerEvents?: 'none' | 'all';
 }
 
+interface GeometryInteractionProps {
+  dataTestId?: string;
+  dataPieceId?: string;
+  onMouseDown?: (event: ReactMouseEvent<SVGElement>) => void;
+  onContextMenu?: (event: ReactMouseEvent<SVGElement>) => void;
+}
+
 const buildAxisTicks = (dimension: number) => {
   const ticks = new Set<number>([0, dimension]);
   const interval = dimension <= 24 ? 6 : 12;
@@ -91,10 +98,13 @@ const renderPieceGeometry = (
   centerY: number,
   style: GeometryStyle,
   dataShapeKind?: TerrainPiece['shape']['kind'],
+  interactionProps?: GeometryInteractionProps,
 ) => {
   if (piece.shape.kind === 'circle') {
     return (
       <circle
+        data-testid={interactionProps?.dataTestId}
+        data-piece-id={interactionProps?.dataPieceId}
         data-shape-kind={dataShapeKind}
         cx={centerX}
         cy={centerY}
@@ -106,6 +116,8 @@ const renderPieceGeometry = (
         strokeOpacity={style.strokeOpacity}
         strokeDasharray={style.strokeDasharray}
         pointerEvents={style.pointerEvents}
+        onMouseDown={interactionProps?.onMouseDown}
+        onContextMenu={interactionProps?.onContextMenu}
       />
     );
   }
@@ -113,6 +125,8 @@ const renderPieceGeometry = (
   if (piece.shape.kind === 'rectangle') {
     return (
       <rect
+        data-testid={interactionProps?.dataTestId}
+        data-piece-id={interactionProps?.dataPieceId}
         data-shape-kind={dataShapeKind}
         x={centerX - piece.shape.width / 2}
         y={centerY - piece.shape.height / 2}
@@ -127,6 +141,8 @@ const renderPieceGeometry = (
         strokeOpacity={style.strokeOpacity}
         strokeDasharray={style.strokeDasharray}
         pointerEvents={style.pointerEvents}
+        onMouseDown={interactionProps?.onMouseDown}
+        onContextMenu={interactionProps?.onContextMenu}
       />
     );
   }
@@ -135,6 +151,8 @@ const renderPieceGeometry = (
 
   return (
     <polygon
+      data-testid={interactionProps?.dataTestId}
+      data-piece-id={interactionProps?.dataPieceId}
       data-shape-kind={dataShapeKind}
       points={points}
       transform={`translate(${centerX} ${centerY}) rotate(${piece.rotation})`}
@@ -145,6 +163,8 @@ const renderPieceGeometry = (
       strokeOpacity={style.strokeOpacity}
       strokeDasharray={style.strokeDasharray}
       pointerEvents={style.pointerEvents}
+      onMouseDown={interactionProps?.onMouseDown}
+      onContextMenu={interactionProps?.onContextMenu}
     />
   );
 };
@@ -364,12 +384,12 @@ export function TableCanvas({
             const isDragging = piece.id === draggingPieceId;
             const outlineStroke = isDragging ? DRAGGING_STROKE : SELECTION_STROKE;
 
-            const handlePieceMouseDown = (event: ReactMouseEvent<SVGCircleElement>) => {
+            const handlePieceMouseDown = (event: ReactMouseEvent<SVGElement>) => {
               event.stopPropagation();
               onPieceMouseDown?.(piece.id, event as unknown as ReactMouseEvent<SVGGElement>);
             };
 
-            const handlePieceContextMenu = (event: ReactMouseEvent<SVGCircleElement>) => {
+            const handlePieceContextMenu = (event: ReactMouseEvent<SVGElement>) => {
               event.preventDefault();
               event.stopPropagation();
               onPieceContextMenu?.(piece.id, event as unknown as ReactMouseEvent<SVGGElement>);
@@ -387,19 +407,26 @@ export function TableCanvas({
               >
                 <title>{`${piece.name}: ${piece.traits.join(', ')}`}</title>
 
-                <circle
-                  data-testid="terrain-piece-hitbox"
-                  data-piece-id={piece.id}
-                  cx={centerX}
-                  cy={centerY}
-                  r={piece.collisionRadius + 0.8}
-                  fill="#ffffff"
-                  fillOpacity={0}
-                  stroke="none"
-                  pointerEvents="all"
-                  onMouseDown={handlePieceMouseDown}
-                  onContextMenu={handlePieceContextMenu}
-                />
+                {renderPieceGeometry(
+                  piece,
+                  centerX,
+                  centerY,
+                  {
+                    fill: '#ffffff',
+                    fillOpacity: 0,
+                    stroke: 'none',
+                    strokeWidth: 0,
+                    strokeOpacity: 0,
+                    pointerEvents: 'all',
+                  },
+                  piece.shape.kind,
+                  {
+                    dataTestId: 'terrain-piece-hit-target',
+                    dataPieceId: piece.id,
+                    onMouseDown: handlePieceMouseDown,
+                    onContextMenu: handlePieceContextMenu,
+                  },
+                )}
 
                 {isSelected
                   ? renderPieceGeometry(

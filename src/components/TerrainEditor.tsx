@@ -67,6 +67,9 @@ const arePositionsEqual = (
   right: { x: number; y: number },
 ) => left.x === right.x && left.y === right.y;
 
+const isTerrainLibraryDrag = (dataTransfer: DataTransfer | null) =>
+  Boolean(dataTransfer && Array.from(dataTransfer.types ?? []).includes(TERRAIN_LIBRARY_MIME_TYPE));
+
 const parseLibraryDropPayload = (dataTransfer: DataTransfer | null): TerrainLibraryDropPayload | null => {
   if (!dataTransfer) {
     return null;
@@ -398,7 +401,7 @@ export function TerrainEditor({
   }, []);
 
   const handleCanvasDragOver = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
-    if (!parseLibraryDropPayload(event.dataTransfer)) {
+    if (!isTerrainLibraryDrag(event.dataTransfer)) {
       return;
     }
 
@@ -409,14 +412,16 @@ export function TerrainEditor({
 
   const handleCanvasDrop = useCallback(
     (event: ReactDragEvent<HTMLDivElement>) => {
+      if (isTerrainLibraryDrag(event.dataTransfer)) {
+        event.preventDefault();
+      }
+
       const payload = parseLibraryDropPayload(event.dataTransfer);
       setLibraryDragActive(false);
 
       if (!payload) {
         return;
       }
-
-      event.preventDefault();
 
       const pointer = toTableCoordinates(event.clientX, event.clientY);
 
