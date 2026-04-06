@@ -58,9 +58,19 @@ interface TerrainLibraryDropPayload {
 
 const quarterLabels = ['NW', 'NE', 'SW', 'SE'] as const;
 
-const isTextEntryTarget = (target: EventTarget | null) =>
-  target instanceof HTMLElement &&
-  (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+const textEntryInputTypes = new Set(['email', 'number', 'password', 'search', 'tel', 'text', 'url']);
+
+const isTextEntryTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.isContentEditable || target instanceof HTMLTextAreaElement) {
+    return true;
+  }
+
+  return target instanceof HTMLInputElement && textEntryInputTypes.has(target.type);
+};
 
 const arePositionsEqual = (
   left: { x: number; y: number },

@@ -163,6 +163,31 @@ describe('TerrainEditor', () => {
     expect(screen.queryAllByTestId('terrain-piece')).toHaveLength(0);
   });
 
+  it('keeps delete and undo shortcuts working while the snap toggle checkbox has focus', () => {
+    const { container } = render(
+      <TerrainEditor
+        widthInches={48}
+        heightInches={48}
+        deploymentDepthInches={12}
+        initialPieces={[baseWallPiece]}
+      />,
+    );
+
+    selectPiece(container, 'wall-1', 10, 10);
+
+    const snapToggle = screen.getByTestId('snap-toggle');
+    snapToggle.focus();
+
+    fireEvent.keyDown(snapToggle, { key: 'Delete' });
+    expect(screen.queryAllByTestId('terrain-piece')).toHaveLength(0);
+
+    fireEvent.keyDown(snapToggle, { key: 'z', ctrlKey: true });
+    expect(screen.getAllByTestId('terrain-piece')).toHaveLength(1);
+
+    fireEvent.keyDown(snapToggle, { key: 'z', ctrlKey: true, shiftKey: true });
+    expect(screen.queryAllByTestId('terrain-piece')).toHaveLength(0);
+  });
+
   it('rotates the selected piece from the rotation handle and can undo the change', () => {
     const { container } = render(
       <TerrainEditor
