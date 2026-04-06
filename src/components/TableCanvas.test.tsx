@@ -59,14 +59,23 @@ const samplePieces: TerrainPiece[] = [
 ];
 
 describe('TableCanvas', () => {
-  it('renders the default table labels and deployment zones', () => {
+  it('renders the default 4×6 table labels and deployment zones on the long edges', () => {
     render(<TableCanvas />);
 
     expect(screen.getByRole('img', { name: /game table canvas/i })).toBeInTheDocument();
     expect(screen.getByText('Width: 48"')).toBeInTheDocument();
-    expect(screen.getByText('Height: 48"')).toBeInTheDocument();
+    expect(screen.getByText('Height: 72"')).toBeInTheDocument();
     expect(screen.getByTestId('deployment-zone-left')).toBeInTheDocument();
     expect(screen.getByTestId('deployment-zone-right')).toBeInTheDocument();
+  });
+
+  it('switches deployment zones to the top and bottom when the long edge is horizontal', () => {
+    render(<TableCanvas widthInches={72} heightInches={48} />);
+
+    expect(screen.getByTestId('deployment-zone-top')).toBeInTheDocument();
+    expect(screen.getByTestId('deployment-zone-bottom')).toBeInTheDocument();
+    expect(screen.queryByTestId('deployment-zone-left')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('deployment-zone-right')).not.toBeInTheDocument();
   });
 
   it('keeps a responsive aspect ratio wrapper', () => {

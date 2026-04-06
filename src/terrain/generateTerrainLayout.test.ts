@@ -29,6 +29,8 @@ describe('generateTerrainLayout', () => {
       const analysis = analyzeTerrainLayout(layout);
 
       expect(layout.pieces).toHaveLength(18);
+      expect(layout.widthInches).toBe(48);
+      expect(layout.heightInches).toBe(72);
       expect(Math.max(...analysis.quarterCounts)).toBeLessThanOrEqual(5);
       expect(analysis.overlaps).toHaveLength(0);
       expect(analysis.deploymentCenterIntrusions).toHaveLength(0);

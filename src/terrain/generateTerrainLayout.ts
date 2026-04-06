@@ -17,7 +17,7 @@ import type {
 } from './types';
 
 const DEFAULT_WIDTH = 48;
-const DEFAULT_HEIGHT = 48;
+const DEFAULT_HEIGHT = 72;
 const DEFAULT_DEPLOYMENT_DEPTH = 12;
 const DEFAULT_MIN_PIECES = 15;
 const DEFAULT_MAX_PIECES = 20;

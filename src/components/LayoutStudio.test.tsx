@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { LayoutStudio } from './LayoutStudio';
 
 describe('LayoutStudio', () => {
@@ -42,6 +42,33 @@ describe('LayoutStudio', () => {
     expect(() => fireEvent.click(screen.getByRole('button', { name: /save current layout/i }))).not.toThrow();
     expect(screen.getByText('Practice Match')).toBeInTheDocument();
     expect(screen.getByText(/saved layout "Practice Match" for this tab/i)).toBeInTheDocument();
+  });
+
+  it('keeps the full share URL out of the header while copy still uses it', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText,
+      },
+    });
+
+    render(<LayoutStudio />);
+
+    const currentHash = window.location.hash.slice(1);
+
+    expect(currentHash.length).toBeGreaterThan(0);
+    expect(screen.queryByText((content) => content.includes(currentHash))).not.toBeInTheDocument();
+    expect(screen.getByText(/use copy share url to grab the full link/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /copy share url/i }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(window.location.toString());
+    });
+
+    expect(screen.getByText(/shareable URL copied to the clipboard/i)).toBeInTheDocument();
   });
 
   it('renders a print legend with terrain piece names and active traits', () => {

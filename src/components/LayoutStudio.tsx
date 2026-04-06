@@ -215,6 +215,14 @@ export function LayoutStudio() {
   );
 
   const shareUrl = useMemo(() => createShareUrl(layout), [layout]);
+  const shareUrlPreview = useMemo(() => {
+    try {
+      const url = new URL(shareUrl);
+      return `${url.origin}${url.pathname}#…`;
+    } catch {
+      return 'Share link ready to copy';
+    }
+  }, [shareUrl]);
   const legendPieces = useMemo(
     () => [...layout.pieces].sort((left, right) => left.name.localeCompare(right.name)),
     [layout.pieces],
@@ -607,7 +615,7 @@ export function LayoutStudio() {
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] lg:items-end">
           <label className="flex flex-col gap-2 text-sm text-slate-200">
             Layout title
             <input
@@ -628,8 +636,17 @@ export function LayoutStudio() {
           </label>
 
           <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-4 py-3 text-sm text-cyan-50">
-            <p className="font-semibold text-cyan-200">Live share URL</p>
-            <p className="mt-1 break-all text-xs text-cyan-50/80">{shareUrl}</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-semibold text-cyan-200">Live share link</p>
+              <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-100">
+                Ready
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-cyan-50/80">
+              Use Copy share URL to grab the full link. The preview stays shortened so the header
+              does not turn into a wall of hash text.
+            </p>
+            <p className="mt-3 truncate font-mono text-xs text-cyan-100/90">{shareUrlPreview}</p>
           </div>
         </div>
 

@@ -20,6 +20,14 @@ describe('layout helpers', () => {
     vi.restoreAllMocks();
   });
 
+  it('uses the standard 4×6 table as the default layout size', () => {
+    const layout = createDefaultLayout();
+
+    expect(layout.table.widthInches).toBe(48);
+    expect(layout.table.heightInches).toBe(72);
+    expect(layout.table.deploymentDepthInches).toBe(12);
+  });
+
   it('round-trips a layout through the share hash serializer', () => {
     const layout = createDefaultLayout();
     layout.table.title = 'Hash Test';

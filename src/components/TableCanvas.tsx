@@ -5,8 +5,11 @@ import type {
   PointerEvent as ReactPointerEvent,
   Ref,
 } from 'react';
+import { getDeploymentOrientation } from '../table/tableGeometry';
 import { TERRAIN_TRAIT_SHORT_LABELS, type TerrainPiece as EditorTerrainPiece } from '../terrain/types';
 import type { TerrainPiece as LayoutTerrainPiece } from '../types/layout';
+
+export { getDeploymentOrientation } from '../table/tableGeometry';
 
 export interface TableCanvasProps {
   widthInches?: number;
@@ -30,8 +33,6 @@ export interface TableCanvasProps {
   onPiecePointerDown?: (pieceId: string, event: ReactPointerEvent<SVGGElement>) => void;
   onPieceSelect?: (pieceId: string) => void;
 }
-
-type DeploymentOrientation = 'horizontal' | 'vertical';
 
 export const TABLE_SCENE_MARGIN = {
   top: 4,
@@ -120,11 +121,6 @@ export const formatTableMeasure = (value: number) => {
 
   return formatInches(value);
 };
-
-export const getDeploymentOrientation = (
-  widthInches: number,
-  heightInches: number,
-): DeploymentOrientation => (widthInches >= heightInches ? 'vertical' : 'horizontal');
 
 export const getSceneSize = (widthInches: number, heightInches: number) => ({
   sceneWidth: TABLE_SCENE_MARGIN.left + widthInches + TABLE_SCENE_MARGIN.right,
@@ -271,7 +267,7 @@ const renderLayoutPieceShape = (piece: LayoutTerrainPiece) => {
 
 export function TableCanvas({
   widthInches = 48,
-  heightInches = 48,
+  heightInches = 72,
   deploymentDepthInches = 12,
   title,
   pieces,
