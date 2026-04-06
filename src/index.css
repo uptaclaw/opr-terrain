@@ -3,14 +3,68 @@
 :root {
   color-scheme: dark;
   font-family: Inter, system-ui, sans-serif;
+  background: #020617;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: #020617;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background: #020617;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+input[type='range'] {
+  accent-color: #22d3ee;
 }
 
 #root {
   min-height: 100vh;
+}
+
+@media print {
+  :root {
+    color-scheme: light;
+    background: #ffffff;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: auto;
+    background: #ffffff;
+  }
+
+  body {
+    color: #0f172a;
+  }
+
+  .screen-only {
+    display: none !important;
+  }
+
+  .print-sheet {
+    break-inside: avoid;
+    box-shadow: none !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  @page {
+    margin: 0.5in;
+    size: auto;
+  }
 }
