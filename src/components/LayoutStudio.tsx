@@ -11,6 +11,7 @@ import {
 } from '../lib/layout';
 import type { LayoutState, SavedLayoutRecord, TerrainPiece, TerrainTrait } from '../types/layout';
 import { formatInches, formatTableMeasure, getSceneSize, TableCanvas } from './TableCanvas';
+import { TerrainSummaryLegend } from './TerrainSummaryLegend';
 
 type DragState = {
   pieceId: string;
@@ -832,6 +833,8 @@ export function LayoutStudio() {
               onPieceSelect={setSelectedPieceId}
             />
           </div>
+
+          <TerrainSummaryLegend pieces={layout.pieces} />
         </section>
 
         <aside className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
