@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { TerrainPreset, TerrainTrait, ShapeOption } from '../types/terrain';
 import { TERRAIN_PRESETS, TRAIT_LABELS, TRAIT_DESCRIPTIONS } from '../data/terrainPresets';
-import { TerrainTrait as TerrainTraitEnum } from '../types/terrain';
 
 interface SelectedTerrain {
   preset: TerrainPreset;
@@ -14,13 +13,31 @@ interface CustomTerrainBuilder {
   shapeOption: ShapeOption | null;
 }
 
-const ALL_TRAITS = Object.values(TerrainTraitEnum);
+const ALL_TRAITS: TerrainTrait[] = [
+  'Soft Cover',
+  'Hard Cover',
+  'Difficult',
+  'Dangerous',
+  'Impassable',
+  'Elevated',
+  'LoS Blocking',
+];
 
 const SHAPE_ICON_MAP: Record<string, string> = {
   rectangle: '▭',
   circle: '●',
   polygon: '▲',
 };
+
+const CUSTOM_SHAPE_OPTIONS: ShapeOption[] = [
+  { kind: 'circle', label: 'Small circle (3")', radius: 1.5 },
+  { kind: 'circle', label: 'Medium circle (5")', radius: 2.5 },
+  { kind: 'circle', label: 'Large circle (7")', radius: 3.5 },
+  { kind: 'rectangle', label: 'Small rect (3×3")', width: 3, height: 3 },
+  { kind: 'rectangle', label: 'Medium rect (5×4")', width: 5, height: 4 },
+  { kind: 'rectangle', label: 'Large rect (6×6")', width: 6, height: 6 },
+  { kind: 'rectangle', label: 'Strip (8×2")', width: 8, height: 2 },
+];
 
 export function TerrainLibrary() {
   const [selectedTerrain, setSelectedTerrain] = useState<SelectedTerrain | null>(null);
@@ -48,6 +65,10 @@ export function TerrainLibrary() {
     });
   };
 
+  const selectCustomShape = (shapeOption: ShapeOption) => {
+    setCustomTerrain((prev) => ({ ...prev, shapeOption }));
+  };
+
   const isSelected = (preset: TerrainPreset, shapeOption: ShapeOption) => {
     return (
       !showCustomBuilder &&
@@ -55,6 +76,12 @@ export function TerrainLibrary() {
       selectedTerrain?.shapeOption === shapeOption
     );
   };
+
+  const isCustomShapeSelected = (shapeOption: ShapeOption) => {
+    return customTerrain.shapeOption === shapeOption;
+  };
+
+  const customTerrainReady = customTerrain.traits.size > 0 && customTerrain.shapeOption !== null;
 
   return (
     <aside
@@ -187,12 +214,33 @@ export function TerrainLibrary() {
                 </div>
               </div>
 
-              <div className="rounded-lg bg-cyan-500/5 p-2 text-xs text-cyan-300/80">
-                <p className="font-medium">Selected: {customTerrain.traits.size} traits</p>
-                <p className="mt-0.5 text-cyan-400/60">
-                  Custom placement will be available once traits are selected
-                </p>
+              <div>
+                <p className="mb-2 text-xs font-medium text-slate-300">Select Shape:</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {CUSTOM_SHAPE_OPTIONS.map((shapeOption, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => selectCustomShape(shapeOption)}
+                      className={`rounded-lg px-2.5 py-1.5 text-left text-xs transition-all ${
+                        isCustomShapeSelected(shapeOption)
+                          ? 'bg-purple-500/20 text-purple-200 ring-1 ring-purple-400/40'
+                          : 'bg-slate-700/40 text-slate-300 hover:bg-slate-700/60'
+                      }`}
+                    >
+                      <span className="mr-1 opacity-60">{SHAPE_ICON_MAP[shapeOption.kind]}</span>
+                      {shapeOption.label}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {!customTerrainReady && (
+                <div className="rounded-lg bg-purple-500/5 p-2 text-xs text-purple-300/80">
+                  <p className="font-medium">
+                    Select {customTerrain.traits.size === 0 ? 'traits and' : ''} a shape to continue
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -208,12 +256,12 @@ export function TerrainLibrary() {
         </div>
       )}
 
-      {showCustomBuilder && customTerrain.traits.size > 0 && (
+      {showCustomBuilder && customTerrainReady && (
         <div className="mt-auto rounded-lg bg-purple-950/40 p-3 text-xs">
           <p className="font-medium text-purple-200">Custom terrain ready:</p>
           <p className="mt-1 text-purple-300/80">
             {customTerrain.name} ({customTerrain.traits.size} trait
-            {customTerrain.traits.size !== 1 ? 's' : ''})
+            {customTerrain.traits.size !== 1 ? 's' : ''}) — {customTerrain.shapeOption!.label}
           </p>
         </div>
       )}

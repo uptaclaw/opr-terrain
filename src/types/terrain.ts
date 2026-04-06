@@ -2,22 +2,14 @@
  * Terrain trait flags based on OPR:AoF rules.
  * Multiple traits can be combined on a single terrain piece.
  */
-export enum TerrainTrait {
-  /** +1 to Defense rolls when targeted through/in this terrain */
-  SoftCover = 'SOFT_COVER',
-  /** +2 to Defense rolls when targeted through/in this terrain */
-  HardCover = 'HARD_COVER',
-  /** Counts as double distance for movement */
-  Difficult = 'DIFFICULT',
-  /** Units moving through must take dangerous terrain tests */
-  Dangerous = 'DANGEROUS',
-  /** Units cannot move through */
-  Impassable = 'IMPASSABLE',
-  /** Units on top gain height advantage */
-  Elevated = 'ELEVATED',
-  /** Completely blocks line of sight */
-  LoSBlocking = 'LOS_BLOCKING',
-}
+export type TerrainTrait =
+  | 'Soft Cover'
+  | 'Hard Cover'
+  | 'Difficult'
+  | 'Dangerous'
+  | 'Impassable'
+  | 'Elevated'
+  | 'LoS Blocking';
 
 /**
  * Shape type for terrain pieces.
@@ -33,53 +25,61 @@ export interface Position {
 }
 
 /**
- * Geometric shape definition for terrain.
+ * Discriminated union of terrain shapes.
+ * Uses shape-specific fields for type safety and compatibility.
  */
-export interface TerrainShape {
-  kind: ShapeKind;
-  /** Dimensions in inches (width for rectangle, diameter for circle) */
-  dimensions: {
-    width?: number;
-    height?: number;
-    diameter?: number;
-  };
-  /** Vertices for custom polygons (in local coordinates) */
-  vertices?: Position[];
-  /** Rotation angle in degrees */
-  rotation: number;
-}
+export type TerrainShape =
+  | {
+      kind: 'circle';
+      radius: number;
+    }
+  | {
+      kind: 'rectangle';
+      width: number;
+      height: number;
+    }
+  | {
+      kind: 'polygon';
+      points: Position[];
+    };
 
 /**
  * A placed terrain piece on the table.
+ * Compatible with existing terrain layout generator.
  */
 export interface TerrainPiece {
   id: string;
-  /** Position on the table in inches */
-  position: Position;
-  /** Shape and dimensions */
-  shape: TerrainShape;
-  /** Set of terrain trait flags */
-  traits: Set<TerrainTrait>;
-  /** Display name */
+  templateId: string;
   name: string;
-  /** Display color (hex) */
   color: string;
+  traits: TerrainTrait[];
+  x: number;
+  y: number;
+  rotation: number;
+  shape: TerrainShape;
+  collisionRadius: number;
 }
 
 /**
  * Shape option within a preset (pre-defined dimensions).
  */
-export interface ShapeOption {
-  kind: ShapeKind;
-  label: string;
-  dimensions: {
-    width?: number;
-    height?: number;
-    diameter?: number;
-  };
-  /** Pre-defined vertices for irregular polygons */
-  vertices?: Position[];
-}
+export type ShapeOption =
+  | {
+      kind: 'circle';
+      label: string;
+      radius: number;
+    }
+  | {
+      kind: 'rectangle';
+      label: string;
+      width: number;
+      height: number;
+    }
+  | {
+      kind: 'polygon';
+      label: string;
+      points: Position[];
+    };
 
 /**
  * Named terrain preset with pre-selected trait combinations.
@@ -96,3 +96,16 @@ export interface TerrainPreset {
   /** Icon identifier (for future icon system) */
   icon?: string;
 }
+
+/**
+ * Short labels for terrain traits.
+ */
+export const TERRAIN_TRAIT_SHORT_LABELS: Record<TerrainTrait, string> = {
+  'Soft Cover': 'SC',
+  'Hard Cover': 'HC',
+  Difficult: 'Dif',
+  Dangerous: 'Dan',
+  Impassable: 'Imp',
+  Elevated: 'Ele',
+  'LoS Blocking': 'LoS',
+};
