@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { cloneLayout, createDefaultLayout, createTerrainPiece, getTerrainTemplate, terrainCatalog } from '../data/terrainCatalog';
+import {
+  cloneLayout,
+  convertGeneratedTerrainPieceToLayoutPiece,
+  createDefaultLayout,
+  createTerrainPiece,
+  getTerrainTemplate,
+  terrainCatalog,
+} from '../data/terrainCatalog';
 import {
   createShareUrl,
   decodeLayoutHash,
@@ -347,40 +354,7 @@ export function LayoutStudio() {
   };
 
   const handleLayoutGenerated = (terrainLayout: TerrainLayout) => {
-    // Convert TerrainLayout pieces to LayoutState pieces
-    const convertedPieces: TerrainPiece[] = terrainLayout.pieces.map((terrainPiece) => {
-      // Find the template to get display properties
-      const template = getTerrainTemplate(terrainPiece.templateId);
-      if (!template) {
-        throw new Error(`Unknown template: ${terrainPiece.templateId}`);
-      }
-
-      // Map terrain traits to layout traits
-      const traits: TerrainTrait[] = terrainPiece.traits.map((traitLabel, index) => ({
-        id: `${terrainPiece.id}-trait-${index}`,
-        label: traitLabel,
-        category: traitLabel.includes('Cover') ? 'cover' : 
-                  traitLabel === 'Difficult' || traitLabel === 'Dangerous' || traitLabel === 'Impassable' ? 'movement' : 'los',
-        active: true,
-      }));
-
-      return {
-        id: terrainPiece.id,
-        templateId: terrainPiece.templateId,
-        name: terrainPiece.name,
-        shape: template.shape,
-        fill: terrainPiece.color,
-        stroke: terrainPiece.color,
-        width: terrainPiece.shape.kind === 'circle' ? terrainPiece.shape.radius * 2 : 
-               terrainPiece.shape.kind === 'rectangle' ? terrainPiece.shape.width : 6,
-        height: terrainPiece.shape.kind === 'circle' ? terrainPiece.shape.radius * 2 :
-                terrainPiece.shape.kind === 'rectangle' ? terrainPiece.shape.height : 6,
-        x: terrainPiece.x,
-        y: terrainPiece.y,
-        rotation: terrainPiece.rotation,
-        traits,
-      };
-    });
+    const convertedPieces: TerrainPiece[] = terrainLayout.pieces.map(convertGeneratedTerrainPieceToLayoutPiece);
 
     setLayout((current) => ({
       ...current,
@@ -390,7 +364,9 @@ export function LayoutStudio() {
 
     setActiveSavedLayoutId(null);
     setLayoutNameInput('');
-    setStatusMessage(`Generated ${convertedPieces.length} terrain pieces using ${terrainLayout.placementConfig?.strategy || 'random'} strategy.`);
+    setStatusMessage(
+      `Generated ${convertedPieces.length} terrain pieces using ${terrainLayout.placementConfig?.strategy || 'random'} strategy.`,
+    );
   };
 
   const handlePiecePointerDown = (

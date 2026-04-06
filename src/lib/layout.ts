@@ -1,4 +1,5 @@
 import { cloneLayout, createDefaultLayout } from '../data/terrainCatalog';
+import type { PlacementConfig } from '../terrain/types';
 import type { LayoutState, SavedLayoutRecord, TableSettings, TerrainPiece, TerrainTrait } from '../types/layout';
 
 export const WORKING_LAYOUT_STORAGE_KEY = 'opr-terrain.working-layout.v1';
@@ -87,7 +88,7 @@ const normalizeTable = (value: unknown): TableSettings => {
   };
 };
 
-const normalizePlacementConfig = (value: unknown) => {
+const normalizePlacementConfig = (value: unknown): PlacementConfig | undefined => {
   if (!isObject(value)) {
     return undefined;
   }

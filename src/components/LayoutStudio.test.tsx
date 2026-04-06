@@ -96,4 +96,18 @@ describe('LayoutStudio', () => {
 
     expect(screen.getByTestId('terrain-summary-hard-cover')).toHaveTextContent('1 piece');
   });
+
+  it('converts and renders a default generated layout through the shipped LayoutStudio path', () => {
+    render(<LayoutStudio />);
+
+    expect(() => {
+      fireEvent.click(screen.getByRole('button', { name: /generate layout/i }));
+    }).not.toThrow();
+
+    expect(screen.getByText(/generated 16 terrain pieces using random strategy/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Wall').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Marsh').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Outcrop').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Hedge').length).toBeGreaterThan(0);
+  });
 });
