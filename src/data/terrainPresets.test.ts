@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { TerrainTrait } from '../types/terrain';
+import type { TerrainTrait } from '../terrain/types';
 import { TERRAIN_PRESETS, TRAIT_LABELS, TRAIT_DESCRIPTIONS } from '../data/terrainPresets';
 
 describe('Terrain Data Model', () => {

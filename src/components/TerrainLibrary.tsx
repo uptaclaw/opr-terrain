@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { TerrainPreset, TerrainTrait, ShapeOption } from '../types/terrain';
+import type { ShapeOption, TerrainPreset, TerrainTrait } from '../terrain/types';
 import { TERRAIN_PRESETS, TRAIT_LABELS, TRAIT_DESCRIPTIONS } from '../data/terrainPresets';
 
 interface SelectedTerrain {
@@ -23,7 +23,7 @@ const ALL_TRAITS: TerrainTrait[] = [
   'LoS Blocking',
 ];
 
-const SHAPE_ICON_MAP: Record<string, string> = {
+const SHAPE_ICON_MAP: Record<ShapeOption['kind'], string> = {
   rectangle: '▭',
   circle: '●',
   polygon: '▲',
