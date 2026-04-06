@@ -16,6 +16,10 @@ describe('layout helpers', () => {
     window.history.replaceState(window.history.state, '', '/');
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('round-trips a layout through the share hash serializer', () => {
     const layout = createDefaultLayout();
     layout.table.title = 'Hash Test';
@@ -34,7 +38,7 @@ describe('layout helpers', () => {
     const layout = createDefaultLayout();
     layout.pieces[1].y = 22;
 
-    persistWorkingLayout(layout);
+    expect(persistWorkingLayout(layout)).toBe(true);
 
     expect(window.localStorage.getItem(WORKING_LAYOUT_STORAGE_KEY)).toBeTruthy();
     expect(loadWorkingLayout()?.pieces[1].y).toBe(22);
@@ -46,24 +50,57 @@ describe('layout helpers', () => {
     const second = createDefaultLayout();
     second.table.title = 'Bravo';
 
-    persistSavedLayouts([
-      {
-        id: 'a',
-        name: 'Alpha',
-        createdAt: '2026-04-01T10:00:00.000Z',
-        updatedAt: '2026-04-01T10:00:00.000Z',
-        layout: first,
-      },
-      {
-        id: 'b',
-        name: 'Bravo',
-        createdAt: '2026-04-01T10:00:00.000Z',
-        updatedAt: '2026-04-02T10:00:00.000Z',
-        layout: second,
-      },
-    ]);
+    expect(
+      persistSavedLayouts([
+        {
+          id: 'a',
+          name: 'Alpha',
+          createdAt: '2026-04-01T10:00:00.000Z',
+          updatedAt: '2026-04-01T10:00:00.000Z',
+          layout: first,
+        },
+        {
+          id: 'b',
+          name: 'Bravo',
+          createdAt: '2026-04-01T10:00:00.000Z',
+          updatedAt: '2026-04-02T10:00:00.000Z',
+          layout: second,
+        },
+      ]),
+    ).toBe(true);
 
     expect(window.localStorage.getItem(SAVED_LAYOUTS_STORAGE_KEY)).toBeTruthy();
     expect(loadSavedLayouts().map((savedLayout) => savedLayout.name)).toEqual(['Bravo', 'Alpha']);
+  });
+
+  it('fails gracefully when the working draft cannot be persisted', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('Storage disabled');
+    });
+
+    expect(persistWorkingLayout(createDefaultLayout())).toBe(false);
+    expect(loadWorkingLayout()).toBeNull();
+  });
+
+  it('fails gracefully when named layouts cannot be persisted', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('Storage disabled');
+    });
+
+    const layout = createDefaultLayout();
+    layout.table.title = 'Unavailable storage';
+
+    expect(
+      persistSavedLayouts([
+        {
+          id: 'blocked',
+          name: 'Unavailable storage',
+          createdAt: '2026-04-01T10:00:00.000Z',
+          updatedAt: '2026-04-01T10:00:00.000Z',
+          layout,
+        },
+      ]),
+    ).toBe(false);
+    expect(loadSavedLayouts()).toEqual([]);
   });
 });

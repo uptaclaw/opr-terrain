@@ -125,6 +125,19 @@ const normalizeSavedLayout = (value: unknown): SavedLayoutRecord | null => {
 
 const canUseStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 
+const writeStorageJson = (key: string, value: unknown) => {
+  if (!canUseStorage()) {
+    return false;
+  }
+
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const loadWorkingLayout = (): LayoutState | null => {
   if (!canUseStorage()) {
     return null;
@@ -143,13 +156,7 @@ export const loadWorkingLayout = (): LayoutState | null => {
   }
 };
 
-export const persistWorkingLayout = (layout: LayoutState) => {
-  if (!canUseStorage()) {
-    return;
-  }
-
-  window.localStorage.setItem(WORKING_LAYOUT_STORAGE_KEY, JSON.stringify(layout));
-};
+export const persistWorkingLayout = (layout: LayoutState) => writeStorageJson(WORKING_LAYOUT_STORAGE_KEY, layout);
 
 export const loadSavedLayouts = (): SavedLayoutRecord[] => {
   if (!canUseStorage()) {
@@ -178,13 +185,7 @@ export const loadSavedLayouts = (): SavedLayoutRecord[] => {
   }
 };
 
-export const persistSavedLayouts = (layouts: SavedLayoutRecord[]) => {
-  if (!canUseStorage()) {
-    return;
-  }
-
-  window.localStorage.setItem(SAVED_LAYOUTS_STORAGE_KEY, JSON.stringify(layouts));
-};
+export const persistSavedLayouts = (layouts: SavedLayoutRecord[]) => writeStorageJson(SAVED_LAYOUTS_STORAGE_KEY, layouts);
 
 const encodeBase64Url = (value: string) => {
   const bytes = new TextEncoder().encode(value);

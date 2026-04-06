@@ -32,6 +32,8 @@ sudo rm -rf /var/www/todo-app/*
 sudo cp -r dist/. /var/www/todo-app/
 ```
 
+A ready-to-copy nginx server block lives at `nginx/default.conf`. It removes the stale `/api/` proxy, keeps SPA fallback in place, and serves a static `/health` response.
+
 nginx should serve the SPA with:
 
 ```nginx

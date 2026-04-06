@@ -90,6 +90,9 @@ const categoryChipClasses: Record<TerrainTrait['category'], string> = {
   los: 'bg-sky-500/15 text-sky-100 ring-sky-400/30 print:bg-sky-100 print:text-sky-900 print:ring-sky-200',
 };
 
+const STORAGE_WARNING_MESSAGE =
+  'Browser storage is unavailable. Draft and named layouts still work in this tab, but they will not persist after refresh.';
+
 export function LayoutStudio() {
   const [layout, setLayout] = useState<LayoutState>(() => getInitialLayout());
   const [savedLayouts, setSavedLayouts] = useState<SavedLayoutRecord[]>(() => loadSavedLayouts());
@@ -99,6 +102,7 @@ export function LayoutStudio() {
   const [statusMessage, setStatusMessage] = useState(
     'Draft changes auto-save locally and update the share URL in the address bar.',
   );
+  const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const cleanSvgRef = useRef<SVGSVGElement | null>(null);
@@ -120,7 +124,7 @@ export function LayoutStudio() {
   }, [layout.pieces]);
 
   useEffect(() => {
-    persistWorkingLayout(layout);
+    setStorageWarning(persistWorkingLayout(layout) ? null : STORAGE_WARNING_MESSAGE);
     updateHash(layout);
   }, [layout]);
 
@@ -218,8 +222,10 @@ export function LayoutStudio() {
 
   const commitSavedLayouts = (nextLayouts: SavedLayoutRecord[]) => {
     const sortedLayouts = sortSavedLayouts(nextLayouts);
-    persistSavedLayouts(sortedLayouts);
+    const persisted = persistSavedLayouts(sortedLayouts);
+    setStorageWarning(persisted ? null : STORAGE_WARNING_MESSAGE);
     setSavedLayouts(sortedLayouts);
+    return persisted;
   };
 
   const updatePiece = (pieceId: string, updater: (piece: TerrainPiece) => TerrainPiece) => {
@@ -389,9 +395,13 @@ export function LayoutStudio() {
             }
           : savedLayout,
       );
-      commitSavedLayouts(updatedLayouts);
+      const persisted = commitSavedLayouts(updatedLayouts);
       setActiveSavedLayoutId(existing.id);
-      setStatusMessage(`Updated saved layout "${name}".`);
+      setStatusMessage(
+        persisted
+          ? `Updated saved layout "${name}".`
+          : `Updated saved layout "${name}" for this tab, but browser storage is unavailable so it will not persist after refresh.`,
+      );
       return;
     }
 
@@ -403,9 +413,13 @@ export function LayoutStudio() {
       layout: cloneLayout(layout),
     };
 
-    commitSavedLayouts([newLayout, ...savedLayouts]);
+    const persisted = commitSavedLayouts([newLayout, ...savedLayouts]);
     setActiveSavedLayoutId(newLayout.id);
-    setStatusMessage(`Saved layout "${name}" to local storage.`);
+    setStatusMessage(
+      persisted
+        ? `Saved layout "${name}" to local storage.`
+        : `Saved layout "${name}" for this tab, but browser storage is unavailable so it will not persist after refresh.`,
+    );
   };
 
   const handleLoadSavedLayout = (savedLayout: SavedLayoutRecord) => {
@@ -423,7 +437,7 @@ export function LayoutStudio() {
     }
 
     const now = new Date().toISOString();
-    commitSavedLayouts(
+    const persisted = commitSavedLayouts(
       savedLayouts.map((layoutRecord) =>
         layoutRecord.id === savedLayout.id
           ? {
@@ -439,7 +453,11 @@ export function LayoutStudio() {
       setLayoutNameInput(nextName);
     }
 
-    setStatusMessage(`Renamed saved layout to "${nextName}".`);
+    setStatusMessage(
+      persisted
+        ? `Renamed saved layout to "${nextName}".`
+        : `Renamed saved layout to "${nextName}" for this tab, but browser storage is unavailable so it will not persist after refresh.`,
+    );
   };
 
   const handleDeleteSavedLayout = (savedLayout: SavedLayoutRecord) => {
@@ -449,14 +467,18 @@ export function LayoutStudio() {
       return;
     }
 
-    commitSavedLayouts(savedLayouts.filter((layoutRecord) => layoutRecord.id !== savedLayout.id));
+    const persisted = commitSavedLayouts(savedLayouts.filter((layoutRecord) => layoutRecord.id !== savedLayout.id));
 
     if (activeSavedLayoutId === savedLayout.id) {
       setActiveSavedLayoutId(null);
       setLayoutNameInput('');
     }
 
-    setStatusMessage(`Deleted saved layout "${savedLayout.name}".`);
+    setStatusMessage(
+      persisted
+        ? `Deleted saved layout "${savedLayout.name}".`
+        : `Deleted saved layout "${savedLayout.name}" for this tab, but browser storage is unavailable so the change will not persist after refresh.`,
+    );
   };
 
   const handleCopyShareUrl = async () => {
@@ -612,6 +634,11 @@ export function LayoutStudio() {
         </div>
 
         <p className="text-sm text-emerald-300/90">{statusMessage}</p>
+        {storageWarning ? (
+          <p role="alert" className="text-sm text-amber-200/90">
+            {storageWarning}
+          </p>
+        ) : null}
       </header>
 
       <section className="screen-only grid gap-6 xl:grid-cols-[20rem_minmax(0,1fr)_20rem]">
