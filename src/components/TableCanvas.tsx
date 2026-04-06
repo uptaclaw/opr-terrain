@@ -1,13 +1,14 @@
 import type { CSSProperties } from 'react';
+import { getDeploymentOrientation } from '../table/tableGeometry';
+import { TERRAIN_TRAIT_SHORT_LABELS, type TerrainPiece } from '../terrain/types';
 
 export interface TableCanvasProps {
   widthInches?: number;
   heightInches?: number;
   deploymentDepthInches?: number;
+  terrainPieces?: TerrainPiece[];
   className?: string;
 }
-
-type DeploymentOrientation = 'horizontal' | 'vertical';
 
 const SCENE_MARGIN = {
   top: 4,
@@ -23,6 +24,8 @@ const TABLE_BORDER = '#f8fafc';
 const DEPLOYMENT_FILL = '#38bdf8';
 const GRID_MINOR = '#e2e8f0';
 const GRID_MAJOR = '#cbd5e1';
+const TERRAIN_STROKE = '#e2e8f0';
+const TERRAIN_LABEL_OUTLINE = '#020617';
 
 const buildAxisTicks = (dimension: number) => {
   const ticks = new Set<number>([0, dimension]);
@@ -55,15 +58,90 @@ const formatTableMeasure = (value: number) => {
   return formatInches(value);
 };
 
-export const getDeploymentOrientation = (
-  widthInches: number,
-  heightInches: number,
-): DeploymentOrientation => (widthInches >= heightInches ? 'vertical' : 'horizontal');
+const renderTerrainShape = (
+  piece: TerrainPiece,
+  centerX: number,
+  centerY: number,
+): JSX.Element => {
+  const sharedProps = {
+    fill: piece.color,
+    fillOpacity: 0.8,
+    stroke: TERRAIN_STROKE,
+    strokeWidth: 0.18,
+    strokeOpacity: 0.85,
+  };
+
+  if (piece.shape.kind === 'circle') {
+    return (
+      <circle
+        data-shape-kind="circle"
+        cx={centerX}
+        cy={centerY}
+        r={piece.shape.radius}
+        {...sharedProps}
+      />
+    );
+  }
+
+  if (piece.shape.kind === 'rectangle') {
+    return (
+      <rect
+        data-shape-kind="rectangle"
+        x={centerX - piece.shape.width / 2}
+        y={centerY - piece.shape.height / 2}
+        width={piece.shape.width}
+        height={piece.shape.height}
+        rx={0.35}
+        transform={`rotate(${piece.rotation} ${centerX} ${centerY})`}
+        {...sharedProps}
+      />
+    );
+  }
+
+  const points = piece.shape.points.map((point) => `${point.x},${point.y}`).join(' ');
+
+  return (
+    <polygon
+      data-shape-kind="polygon"
+      points={points}
+      transform={`translate(${centerX} ${centerY}) rotate(${piece.rotation})`}
+      {...sharedProps}
+    />
+  );
+};
+
+const renderTerrainLabel = (piece: TerrainPiece, centerX: number, centerY: number) => {
+  const traitBadges = piece.traits.map((trait) => TERRAIN_TRAIT_SHORT_LABELS[trait]).join(' • ');
+
+  return (
+    <text
+      x={centerX}
+      y={centerY}
+      fill="#f8fafc"
+      fontSize={0.95}
+      fontWeight={700}
+      textAnchor="middle"
+      dominantBaseline="middle"
+      paintOrder="stroke"
+      stroke={TERRAIN_LABEL_OUTLINE}
+      strokeWidth={0.22}
+      strokeLinejoin="round"
+    >
+      <tspan x={centerX} dy="-0.45em">
+        {piece.name}
+      </tspan>
+      <tspan x={centerX} dy="1.2em" fontSize={0.72} fontWeight={600}>
+        {traitBadges}
+      </tspan>
+    </text>
+  );
+};
 
 export function TableCanvas({
   widthInches = 48,
   heightInches = 48,
   deploymentDepthInches = 12,
+  terrainPieces = [],
   className = '',
 }: TableCanvasProps) {
   const tableX = SCENE_MARGIN.left;
@@ -140,8 +218,8 @@ export function TableCanvas({
       >
         <title>{tableTitle}</title>
         <desc>
-          Responsive wargaming table canvas with 1-inch grid squares, dimension labels, and
-          deployment zones shaded 12 inches from each short edge.
+          Responsive wargaming table canvas with 1-inch grid squares, dimension labels,
+          deployment zones, and generated terrain pieces.
         </desc>
 
         <rect width={sceneWidth} height={sceneHeight} rx={1.5} fill="#020617" />
@@ -216,6 +294,19 @@ export function TableCanvas({
                 strokeOpacity={isMajor ? 0.28 : 0.14}
                 strokeWidth={isMajor ? 0.16 : 0.06}
               />
+            );
+          })}
+
+          {terrainPieces.map((piece) => {
+            const centerX = tableX + piece.x;
+            const centerY = tableY + piece.y;
+
+            return (
+              <g key={piece.id} data-testid="terrain-piece">
+                <title>{`${piece.name}: ${piece.traits.join(', ')}`}</title>
+                {renderTerrainShape(piece, centerX, centerY)}
+                {renderTerrainLabel(piece, centerX, centerY)}
+              </g>
             );
           })}
 
