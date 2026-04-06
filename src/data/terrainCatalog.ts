@@ -1,4 +1,15 @@
-import type { LayoutState, TerrainPiece, TerrainTemplate } from '../types/layout';
+import type {
+  LayoutState,
+  TerrainPiece,
+  TerrainShape as LayoutTerrainShape,
+  TerrainTemplate,
+  TerrainTrait,
+} from '../types/layout';
+import type {
+  TerrainPiece as GeneratedTerrainPiece,
+  TerrainShape as GeneratedTerrainShape,
+  TerrainTrait as GeneratedTerrainTrait,
+} from '../terrain/types';
 
 const DEFAULT_TABLE = {
   widthInches: 48,
@@ -140,3 +151,72 @@ export const createDefaultLayout = (): LayoutState => ({
 
 export const getTerrainTemplate = (templateId: string) =>
   terrainCatalog.find((template) => template.id === templateId);
+
+const generatedTraitCategoryMap: Record<GeneratedTerrainTrait, TerrainTrait['category']> = {
+  'Soft Cover': 'cover',
+  'Hard Cover': 'cover',
+  Difficult: 'movement',
+  Dangerous: 'movement',
+  Impassable: 'movement',
+  Elevated: 'los',
+  'LoS Blocking': 'los',
+};
+
+const getLayoutShapeFromGeneratedShape = (shape: GeneratedTerrainShape): LayoutTerrainShape => {
+  switch (shape.kind) {
+    case 'circle':
+      return 'ellipse';
+    case 'rectangle':
+      return 'rect';
+    case 'polygon':
+    default:
+      return 'diamond';
+  }
+};
+
+const getLayoutDimensionsFromGeneratedShape = (shape: GeneratedTerrainShape) => {
+  if (shape.kind === 'circle') {
+    const diameter = shape.radius * 2;
+    return { width: diameter, height: diameter };
+  }
+
+  if (shape.kind === 'rectangle') {
+    return { width: shape.width, height: shape.height };
+  }
+
+  const xs = shape.points.map((point) => point.x);
+  const ys = shape.points.map((point) => point.y);
+  const width = Math.max(...xs) - Math.min(...xs);
+  const height = Math.max(...ys) - Math.min(...ys);
+
+  return {
+    width: Math.max(width, 2),
+    height: Math.max(height, 2),
+  };
+};
+
+export const convertGeneratedTerrainPieceToLayoutPiece = (
+  terrainPiece: GeneratedTerrainPiece,
+): TerrainPiece => {
+  const { width, height } = getLayoutDimensionsFromGeneratedShape(terrainPiece.shape);
+
+  return {
+    id: terrainPiece.id,
+    templateId: terrainPiece.templateId,
+    name: terrainPiece.name,
+    shape: getLayoutShapeFromGeneratedShape(terrainPiece.shape),
+    fill: terrainPiece.color,
+    stroke: terrainPiece.color,
+    width,
+    height,
+    x: terrainPiece.x,
+    y: terrainPiece.y,
+    rotation: terrainPiece.rotation,
+    traits: terrainPiece.traits.map((traitLabel, index) => ({
+      id: `${terrainPiece.id}-trait-${index}`,
+      label: traitLabel,
+      category: generatedTraitCategoryMap[traitLabel],
+      active: true,
+    })),
+  };
+};

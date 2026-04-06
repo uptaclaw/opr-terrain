@@ -8,7 +8,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { analyzeTerrainLayout } from '../terrain/generateTerrainLayout';
-import type { TerrainPiece, TerrainShapeKind } from '../terrain/types';
+import type { TerrainLayout, TerrainPiece, TerrainShapeKind } from '../terrain/types';
 import { useUndoRedoHistory } from '../hooks/useUndoRedoHistory';
 import {
   constrainTerrainPiecePosition,
@@ -20,6 +20,7 @@ import {
 } from '../terrain/editor';
 import { TableCanvas, TABLE_SCENE_MARGIN } from './TableCanvas';
 import { TerrainLibrarySidebar, TERRAIN_LIBRARY_MIME_TYPE } from './TerrainLibrarySidebar';
+import { AutoPlacementGenerator } from './AutoPlacementGenerator';
 
 interface TerrainEditorProps {
   widthInches: number;
@@ -164,6 +165,14 @@ export function TerrainEditor({
       setFeedback(null);
     },
     [commit, selectedPieceId],
+  );
+
+  const handleLayoutGenerated = useCallback(
+    (layout: TerrainLayout) => {
+      commitPieces(layout.pieces, null);
+      setFeedback(`Generated ${layout.pieces.length} terrain pieces using ${layout.placementConfig?.strategy || 'random'} strategy.`);
+    },
+    [commitPieces],
   );
 
   const handleUndo = useCallback(() => {
@@ -516,6 +525,13 @@ export function TerrainEditor({
         </div>
 
         <aside className="flex flex-col gap-4">
+          <AutoPlacementGenerator
+            widthInches={widthInches}
+            heightInches={heightInches}
+            deploymentDepthInches={deploymentDepthInches}
+            onLayoutGenerated={handleLayoutGenerated}
+          />
+
           <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-5">
             <div className="flex items-start justify-between gap-3">
               <div>

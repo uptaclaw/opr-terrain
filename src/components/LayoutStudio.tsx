@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { cloneLayout, createDefaultLayout, createTerrainPiece, getTerrainTemplate, terrainCatalog } from '../data/terrainCatalog';
+import {
+  cloneLayout,
+  convertGeneratedTerrainPieceToLayoutPiece,
+  createDefaultLayout,
+  createTerrainPiece,
+  getTerrainTemplate,
+  terrainCatalog,
+} from '../data/terrainCatalog';
 import {
   createShareUrl,
   decodeLayoutHash,
@@ -11,7 +18,9 @@ import {
 } from '../lib/layout';
 import type { LayoutState, SavedLayoutRecord, TerrainPiece, TerrainTrait } from '../types/layout';
 import { formatInches, formatTableMeasure, getSceneSize, TableCanvas } from './TableCanvas';
+import { AutoPlacementGenerator } from './AutoPlacementGenerator';
 import { TerrainSummaryLegend } from './TerrainSummaryLegend';
+import type { TerrainLayout } from '../terrain/types';
 
 type DragState = {
   pieceId: string;
@@ -344,6 +353,22 @@ export function LayoutStudio() {
     setStatusMessage('Reset the working layout to the default terrain setup.');
   };
 
+  const handleLayoutGenerated = (terrainLayout: TerrainLayout) => {
+    const convertedPieces: TerrainPiece[] = terrainLayout.pieces.map(convertGeneratedTerrainPieceToLayoutPiece);
+
+    setLayout((current) => ({
+      ...current,
+      pieces: convertedPieces,
+      placementConfig: terrainLayout.placementConfig,
+    }));
+
+    setActiveSavedLayoutId(null);
+    setLayoutNameInput('');
+    setStatusMessage(
+      `Generated ${convertedPieces.length} terrain pieces using ${terrainLayout.placementConfig?.strategy || 'random'} strategy.`,
+    );
+  };
+
   const handlePiecePointerDown = (
     pieceId: string,
     event: ReactPointerEvent<SVGGElement>,
@@ -661,6 +686,14 @@ export function LayoutStudio() {
 
       <section className="screen-only grid gap-6 xl:grid-cols-[20rem_minmax(0,1fr)_20rem]">
         <aside className="flex flex-col gap-6">
+          <AutoPlacementGenerator
+            widthInches={layout.table.widthInches}
+            heightInches={layout.table.heightInches}
+            deploymentDepthInches={layout.table.deploymentDepthInches}
+            onLayoutGenerated={handleLayoutGenerated}
+            initialConfig={layout.placementConfig}
+          />
+
           <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
             <div className="flex items-start justify-between gap-4">
               <div>
