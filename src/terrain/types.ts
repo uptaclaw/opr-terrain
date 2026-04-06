@@ -1,3 +1,6 @@
+/**
+ * Canonical terrain model shared by terrain generation, rendering, and preset/library UI.
+ */
 export type TerrainTrait =
   | 'Soft Cover'
   | 'Hard Cover'
@@ -6,8 +9,6 @@ export type TerrainTrait =
   | 'Impassable'
   | 'Elevated'
   | 'LoS Blocking';
-
-export type TerrainShapeKind = 'circle' | 'rectangle' | 'polygon';
 
 export interface TerrainPoint {
   x: number;
@@ -29,6 +30,8 @@ export type TerrainShape =
       points: TerrainPoint[];
     };
 
+export type TerrainShapeKind = TerrainShape['kind'];
+
 export interface TerrainPiece {
   id: string;
   templateId: string;
@@ -40,6 +43,26 @@ export interface TerrainPiece {
   rotation: number;
   shape: TerrainShape;
   collisionRadius: number;
+}
+
+/**
+ * Selectable preset shape/size option for the terrain library.
+ */
+export type ShapeOption = TerrainShape & {
+  label: string;
+};
+
+/**
+ * Named terrain preset with pre-selected trait combinations.
+ */
+export interface TerrainPreset {
+  id: string;
+  name: string;
+  description: string;
+  traits: TerrainTrait[];
+  shapeOptions: ShapeOption[];
+  color: string;
+  icon?: string;
 }
 
 export interface GenerateTerrainLayoutOptions {
