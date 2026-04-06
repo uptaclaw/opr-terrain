@@ -8,6 +8,8 @@ import {
 } from './catalog';
 import type {
   GenerateTerrainLayoutOptions,
+  PlacementConfig,
+  PlacementStrategy,
   TerrainLayout,
   TerrainLayoutAnalysis,
   TerrainPiece,
@@ -15,6 +17,14 @@ import type {
   TerrainShape,
   TerrainShapeKind,
 } from './types';
+import {
+  getClusterCenter,
+  getLaneCenter,
+  getMirroredPosition,
+  getPlacementDensityMultiplier,
+  getQuarterIndex as getQuarterIndexUtil,
+  shouldPrioritizePiece,
+} from './placementStrategies';
 
 const DEFAULT_WIDTH = 48;
 const DEFAULT_HEIGHT = 72;
@@ -65,17 +75,7 @@ const getShapeCollisionRadius = (shape: TerrainShape) => {
 const getPlacementRadius = (piece: TerrainPiece, collisionBufferInches: number) =>
   piece.collisionRadius + collisionBufferInches / 2;
 
-const getQuarterIndex = (
-  x: number,
-  y: number,
-  widthInches: number,
-  heightInches: number,
-): QuarterIndex => {
-  const column = x < widthInches / 2 ? 0 : 1;
-  const row = y < heightInches / 2 ? 0 : 1;
-
-  return (row * 2 + column) as QuarterIndex;
-};
+const getQuarterIndex = getQuarterIndexUtil;
 
 const buildQuarterTargets = (pieceCount: number, random: () => number): [number, number, number, number] => {
   const base = Math.floor(pieceCount / 4);
@@ -270,8 +270,149 @@ const tryPlacePiece = (
   collisionBufferInches: number,
   maxAttemptsPerPiece: number,
   random: () => number,
+  placementConfig?: PlacementConfig,
+  pieceIndex?: number,
+  totalPieces?: number,
 ): TerrainPiece | null => {
   const placementRadius = getPlacementRadius(piece, collisionBufferInches);
+  const strategy = placementConfig?.strategy || 'random';
+
+  // Strategy-specific placement logic
+  if (strategy === 'symmetrical' && pieceIndex !== undefined && totalPieces !== undefined) {
+    // For symmetrical placement, first half gets placed, second half mirrors
+    if (pieceIndex >= Math.floor(totalPieces / 2)) {
+      const mirrorIndex = pieceIndex - Math.floor(totalPieces / 2);
+      const mirrorPiece = placedPieces[mirrorIndex];
+      if (mirrorPiece) {
+        const axis = widthInches < heightInches ? 'horizontal' : 'vertical';
+        const mirrored = getMirroredPosition(mirrorPiece.x, mirrorPiece.y, widthInches, heightInches, axis);
+        
+        if (
+          isPlacementValid(
+            piece,
+            mirrored.x,
+            mirrored.y,
+            placedPieces,
+            widthInches,
+            heightInches,
+            deploymentDepthInches,
+            collisionBufferInches,
+          )
+        ) {
+          return { ...piece, x: mirrored.x, y: mirrored.y };
+        }
+      }
+    }
+  }
+
+  if (strategy === 'clustered-zones' && pieceIndex !== undefined && totalPieces !== undefined) {
+    // Create 3-4 cluster zones
+    const clusterCount = totalPieces > 12 ? 4 : 3;
+    const clusterIndex = Math.floor((pieceIndex / totalPieces) * clusterCount);
+    const clusterCenter = getClusterCenter(clusterIndex, clusterCount, widthInches, heightInches, random);
+    const clusterRadius = Math.min(widthInches, heightInches) * 0.15; // Cluster spread
+
+    for (let attempt = 0; attempt < maxAttemptsPerPiece; attempt += 1) {
+      const angle = random() * Math.PI * 2;
+      const distance = random() * clusterRadius;
+      const x = clusterCenter.x + Math.cos(angle) * distance;
+      const y = clusterCenter.y + Math.sin(angle) * distance;
+
+      if (
+        isPlacementValid(
+          piece,
+          x,
+          y,
+          placedPieces,
+          widthInches,
+          heightInches,
+          deploymentDepthInches,
+          collisionBufferInches,
+        )
+      ) {
+        return { ...piece, x, y };
+      }
+    }
+  }
+
+  if (strategy === 'los-blocking-lanes' && pieceIndex !== undefined) {
+    // Create sight-line corridors with blocking terrain
+    const laneCount = 3;
+    const laneIndex = pieceIndex % laneCount;
+    const laneCenter = getLaneCenter(laneIndex, laneCount, widthInches, heightInches);
+    const laneWidth = Math.min(widthInches, heightInches) * 0.25;
+
+    for (let attempt = 0; attempt < maxAttemptsPerPiece; attempt += 1) {
+      const isVertical = widthInches < heightInches;
+      const alongLaneOffset = random() * (isVertical ? heightInches : widthInches) * 0.6 - (isVertical ? heightInches : widthInches) * 0.3;
+      const acrossLaneOffset = (random() - 0.5) * laneWidth;
+
+      const x = isVertical ? laneCenter.x + acrossLaneOffset : laneCenter.x + alongLaneOffset;
+      const y = isVertical ? laneCenter.y + alongLaneOffset : laneCenter.y + acrossLaneOffset;
+
+      if (
+        isPlacementValid(
+          piece,
+          x,
+          y,
+          placedPieces,
+          widthInches,
+          heightInches,
+          deploymentDepthInches,
+          collisionBufferInches,
+        )
+      ) {
+        return { ...piece, x, y };
+      }
+    }
+  }
+
+  if (strategy === 'asymmetric' && pieceIndex !== undefined && totalPieces !== undefined) {
+    // Bias toward one side (first 2/3 of pieces go to one half)
+    const denseSide = random() > 0.5 ? 'left' : 'right';
+    const isDensePiece = pieceIndex < Math.floor(totalPieces * 0.66);
+    
+    let boundsMinX: number, boundsMaxX: number;
+    if (isDensePiece) {
+      if (denseSide === 'left') {
+        boundsMinX = placementRadius;
+        boundsMaxX = widthInches * 0.55;
+      } else {
+        boundsMinX = widthInches * 0.45;
+        boundsMaxX = widthInches - placementRadius;
+      }
+    } else {
+      if (denseSide === 'left') {
+        boundsMinX = widthInches * 0.6;
+        boundsMaxX = widthInches - placementRadius;
+      } else {
+        boundsMinX = placementRadius;
+        boundsMaxX = widthInches * 0.4;
+      }
+    }
+
+    for (let attempt = 0; attempt < maxAttemptsPerPiece; attempt += 1) {
+      const x = randomBetween(boundsMinX, boundsMaxX, random);
+      const y = randomBetween(placementRadius, heightInches - placementRadius, random);
+
+      if (
+        isPlacementValid(
+          piece,
+          x,
+          y,
+          placedPieces,
+          widthInches,
+          heightInches,
+          deploymentDepthInches,
+          collisionBufferInches,
+        )
+      ) {
+        return { ...piece, x, y };
+      }
+    }
+  }
+
+  // Default placement (random or balanced-coverage)
   const bounds = getQuarterBounds(preferredQuarter, widthInches, heightInches, placementRadius);
 
   if (bounds.minX > bounds.maxX || bounds.minY > bounds.maxY) {
@@ -314,10 +455,25 @@ export const generateTerrainLayout = (
     collisionBufferInches = DEFAULT_COLLISION_BUFFER,
     maxAttemptsPerPiece = DEFAULT_MAX_ATTEMPTS_PER_PIECE,
     maxLayoutAttempts = DEFAULT_MAX_LAYOUT_ATTEMPTS,
-    random = Math.random,
+    placementConfig,
   } = options;
 
-  const targetPieceCount = pieceCount ?? randomInteger(minPieces, maxPieces, random);
+  // Ensure proper random seeding - use Date.now() if no random function provided
+  const random = options.random || (() => {
+    // Create a simple seeded random using timestamp
+    const seed = Date.now() + Math.random();
+    let state = seed;
+    return () => {
+      state = (state * 1103515245 + 12345) % 2147483648;
+      return state / 2147483648;
+    };
+  })();
+
+  // Apply density multiplier to piece count
+  const densityMultiplier = getPlacementDensityMultiplier(placementConfig?.density || 'balanced');
+  let targetPieceCount = pieceCount ?? randomInteger(minPieces, maxPieces, random);
+  targetPieceCount = Math.round(targetPieceCount * densityMultiplier);
+  targetPieceCount = Math.max(1, Math.min(20, targetPieceCount));
 
   if (targetPieceCount < 1) {
     throw new Error('Terrain layout must request at least one piece.');
@@ -331,11 +487,24 @@ export const generateTerrainLayout = (
     const quarterTargets = buildQuarterTargets(targetPieceCount, random);
     const quarterSequence = buildQuarterSequence(quarterTargets, random);
     const pieceSpecs = buildPieceSpecs(targetPieceCount, random);
+    
+    // Prioritize cover pieces if configured
+    if (placementConfig?.prioritizeCover) {
+      pieceSpecs.sort((a, b) => {
+        const templateA = getTemplateById(a.templateId);
+        const templateB = getTemplateById(b.templateId);
+        const aPriority = templateA.traits.some(t => t === 'Soft Cover' || t === 'Hard Cover' || t === 'LoS Blocking') ? 1 : 0;
+        const bPriority = templateB.traits.some(t => t === 'Soft Cover' || t === 'Hard Cover' || t === 'LoS Blocking') ? 1 : 0;
+        return bPriority - aPriority;
+      });
+    }
+    
     const placedPieces: TerrainPiece[] = [];
     const assignments = pieceSpecs
       .map((pieceSpec, index) => ({
         piece: createPiece(pieceSpec, index, random),
         preferredQuarter: quarterSequence[index]!,
+        index,
       }))
       .sort(
         (left, right) =>
@@ -356,6 +525,9 @@ export const generateTerrainLayout = (
         collisionBufferInches,
         maxAttemptsPerPiece,
         random,
+        placementConfig,
+        assignment.index,
+        targetPieceCount,
       );
 
       if (!placedPiece) {
@@ -374,6 +546,7 @@ export const generateTerrainLayout = (
         targetPieceCount,
         quarterTargets,
         pieces: placedPieces,
+        placementConfig,
       };
     }
   }

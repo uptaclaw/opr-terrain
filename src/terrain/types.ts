@@ -65,6 +65,24 @@ export interface TerrainPreset {
   icon?: string;
 }
 
+export type PlacementStrategy =
+  | 'random'
+  | 'balanced-coverage'
+  | 'symmetrical'
+  | 'asymmetric'
+  | 'clustered-zones'
+  | 'los-blocking-lanes';
+
+export type PlacementDensity = 'sparse' | 'balanced' | 'dense';
+
+export interface PlacementConfig {
+  strategy?: PlacementStrategy;
+  density?: PlacementDensity;
+  prioritizeCover?: boolean;
+  deploymentZoneSafety?: boolean;
+  forceSymmetry?: boolean;
+}
+
 export interface GenerateTerrainLayoutOptions {
   widthInches?: number;
   heightInches?: number;
@@ -76,6 +94,7 @@ export interface GenerateTerrainLayoutOptions {
   maxAttemptsPerPiece?: number;
   maxLayoutAttempts?: number;
   random?: () => number;
+  placementConfig?: PlacementConfig;
 }
 
 export interface TerrainLayout {
@@ -85,6 +104,7 @@ export interface TerrainLayout {
   targetPieceCount: number;
   quarterTargets: [number, number, number, number];
   pieces: TerrainPiece[];
+  placementConfig?: PlacementConfig;
 }
 
 export interface TerrainLayoutAnalysis {
