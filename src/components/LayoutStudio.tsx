@@ -11,7 +11,9 @@ import {
 } from '../lib/layout';
 import type { LayoutState, SavedLayoutRecord, TerrainPiece, TerrainTrait } from '../types/layout';
 import { formatInches, formatTableMeasure, getSceneSize, TableCanvas } from './TableCanvas';
+import { AutoPlacementGenerator } from './AutoPlacementGenerator';
 import { TerrainSummaryLegend } from './TerrainSummaryLegend';
+import type { TerrainLayout } from '../terrain/types';
 
 type DragState = {
   pieceId: string;
@@ -344,6 +346,53 @@ export function LayoutStudio() {
     setStatusMessage('Reset the working layout to the default terrain setup.');
   };
 
+  const handleLayoutGenerated = (terrainLayout: TerrainLayout) => {
+    // Convert TerrainLayout pieces to LayoutState pieces
+    const convertedPieces: TerrainPiece[] = terrainLayout.pieces.map((terrainPiece) => {
+      // Find the template to get display properties
+      const template = getTerrainTemplate(terrainPiece.templateId);
+      if (!template) {
+        throw new Error(`Unknown template: ${terrainPiece.templateId}`);
+      }
+
+      // Map terrain traits to layout traits
+      const traits: TerrainTrait[] = terrainPiece.traits.map((traitLabel, index) => ({
+        id: `${terrainPiece.id}-trait-${index}`,
+        label: traitLabel,
+        category: traitLabel.includes('Cover') || traitLabel.includes('LoS') ? 'cover' : 
+                  traitLabel === 'Difficult' || traitLabel === 'Dangerous' || traitLabel === 'Impassable' ? 'movement' : 'los',
+        active: true,
+      }));
+
+      return {
+        id: terrainPiece.id,
+        templateId: terrainPiece.templateId,
+        name: terrainPiece.name,
+        shape: template.shape,
+        fill: terrainPiece.color,
+        stroke: terrainPiece.color,
+        width: terrainPiece.shape.kind === 'circle' ? terrainPiece.shape.radius * 2 : 
+               terrainPiece.shape.kind === 'rectangle' ? terrainPiece.shape.width : 6,
+        height: terrainPiece.shape.kind === 'circle' ? terrainPiece.shape.radius * 2 :
+                terrainPiece.shape.kind === 'rectangle' ? terrainPiece.shape.height : 6,
+        x: terrainPiece.x,
+        y: terrainPiece.y,
+        rotation: terrainPiece.rotation,
+        traits,
+      };
+    });
+
+    setLayout((current) => ({
+      ...current,
+      pieces: convertedPieces,
+      placementConfig: terrainLayout.placementConfig,
+    }));
+
+    setActiveSavedLayoutId(null);
+    setLayoutNameInput('');
+    setStatusMessage(`Generated ${convertedPieces.length} terrain pieces using ${terrainLayout.placementConfig?.strategy || 'random'} strategy.`);
+  };
+
   const handlePiecePointerDown = (
     pieceId: string,
     event: ReactPointerEvent<SVGGElement>,
@@ -661,6 +710,13 @@ export function LayoutStudio() {
 
       <section className="screen-only grid gap-6 xl:grid-cols-[20rem_minmax(0,1fr)_20rem]">
         <aside className="flex flex-col gap-6">
+          <AutoPlacementGenerator
+            widthInches={layout.table.widthInches}
+            heightInches={layout.table.heightInches}
+            deploymentDepthInches={layout.table.deploymentDepthInches}
+            onLayoutGenerated={handleLayoutGenerated}
+          />
+
           <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
             <div className="flex items-start justify-between gap-4">
               <div>

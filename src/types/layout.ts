@@ -1,3 +1,5 @@
+import type { PlacementConfig } from '../terrain/types';
+
 export type TerrainTraitCategory = 'cover' | 'movement' | 'los';
 
 export type TerrainShape = 'rect' | 'ellipse' | 'diamond';
@@ -35,6 +37,7 @@ export interface LayoutState {
   version: 1;
   table: TableSettings;
   pieces: TerrainPiece[];
+  placementConfig?: PlacementConfig;
 }
 
 export interface SavedLayoutRecord {
