@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { TableCanvas } from './components/TableCanvas';
+import { TerrainLibrary } from './components/TerrainLibrary';
 import { analyzeTerrainLayout, generateTerrainLayout } from './terrain/generateTerrainLayout';
 import type { TerrainLayout } from './terrain/types';
 
@@ -57,11 +58,12 @@ function App() {
           <div className="max-w-4xl space-y-2">
             <p className="text-sm uppercase tracking-[0.2em] text-cyan-300/80">OPR Terrain</p>
             <h1 className="text-3xl font-semibold text-white sm:text-4xl">
-              Auto-placement engine with collision detection
+              Terrain library &amp; auto-placement engine
             </h1>
             <p className="text-sm text-slate-300 sm:text-base">
-              Generates 15-20 randomized terrain pieces with balanced quarter coverage,
-              deployment-zone breathing room, and non-overlapping placement.
+              Browse trait-based terrain presets in the sidebar or reroll a 15-20 piece
+              layout with balanced quarter coverage, deployment-zone breathing room, and
+              non-overlapping placement.
             </p>
           </div>
 
@@ -86,7 +88,9 @@ function App() {
           </div>
         ) : null}
 
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <section className="grid gap-6 xl:grid-cols-[20rem_minmax(0,1fr)_20rem]">
+          <TerrainLibrary />
+
           <div className="rounded-3xl border border-white/10 bg-slate-900/60 p-3 shadow-2xl shadow-cyan-950/30 sm:p-6">
             <TableCanvas
               widthInches={TABLE_WIDTH}
