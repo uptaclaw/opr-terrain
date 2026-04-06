@@ -260,9 +260,13 @@ const isPlacementValid = (
   return !placedPieces.some((piece) => piecesOverlap({ ...candidate, x, y }, piece, collisionBufferInches));
 };
 
+interface AsymmetricContext {
+  denseSide: 'left' | 'right';
+}
+
 const tryPlacePiece = (
   piece: TerrainPiece,
-  preferredQuarter: QuarterIndex,
+  preferredQuarter: QuarterIndex | null,
   placedPieces: readonly TerrainPiece[],
   widthInches: number,
   heightInches: number,
@@ -272,34 +276,62 @@ const tryPlacePiece = (
   random: () => number,
   placementConfig?: PlacementConfig,
   pieceIndex?: number,
+  originalIndex?: number,
   totalPieces?: number,
+  originalPieceOrder?: TerrainPiece[],
+  asymmetricContext?: AsymmetricContext,
 ): TerrainPiece | null => {
   const placementRadius = getPlacementRadius(piece, collisionBufferInches);
   const strategy = placementConfig?.strategy || 'random';
 
+  // Adjust deployment clearance based on deploymentZoneSafety flag
+  const deploymentClearance = placementConfig?.deploymentZoneSafety === false 
+    ? DEPLOYMENT_CENTER_CLEARANCE * 0.5 
+    : DEPLOYMENT_CENTER_CLEARANCE;
+
+  const isPlacementValidAdjusted = (x: number, y: number) => {
+    if (isOutsideTable(piece, x, y, widthInches, heightInches, collisionBufferInches)) {
+      return false;
+    }
+
+    if (placementConfig?.deploymentZoneSafety !== false) {
+      if (
+        collidesWithDeploymentClearance(
+          piece,
+          x,
+          y,
+          widthInches,
+          heightInches,
+          deploymentDepthInches,
+          collisionBufferInches,
+        )
+      ) {
+        return false;
+      }
+    }
+
+    return !placedPieces.some((placed) => piecesOverlap({ ...piece, x, y }, placed, collisionBufferInches));
+  };
+
   // Strategy-specific placement logic
-  if (strategy === 'symmetrical' && pieceIndex !== undefined && totalPieces !== undefined) {
+  if (strategy === 'symmetrical' && originalIndex !== undefined && totalPieces !== undefined) {
     // For symmetrical placement, first half gets placed, second half mirrors
-    if (pieceIndex >= Math.floor(totalPieces / 2)) {
-      const mirrorIndex = pieceIndex - Math.floor(totalPieces / 2);
-      const mirrorPiece = placedPieces[mirrorIndex];
-      if (mirrorPiece) {
-        const axis = widthInches < heightInches ? 'horizontal' : 'vertical';
-        const mirrored = getMirroredPosition(mirrorPiece.x, mirrorPiece.y, widthInches, heightInches, axis);
-        
-        if (
-          isPlacementValid(
-            piece,
-            mirrored.x,
-            mirrored.y,
-            placedPieces,
-            widthInches,
-            heightInches,
-            deploymentDepthInches,
-            collisionBufferInches,
-          )
-        ) {
-          return { ...piece, x: mirrored.x, y: mirrored.y };
+    if (originalIndex >= Math.floor(totalPieces / 2)) {
+      const mirrorIndex = originalIndex - Math.floor(totalPieces / 2);
+      // Find the already-placed piece at the mirror index in the original order
+      const originalMirrorPiece = originalPieceOrder ? originalPieceOrder[mirrorIndex] : null;
+      if (originalMirrorPiece) {
+        // Find the placed version of that piece
+        const placedMirrorPiece = placedPieces.find(p => p.id === originalMirrorPiece.id);
+        if (placedMirrorPiece) {
+          // Deployment axis determines mirror axis: vertical deployment (left/right) needs vertical mirror axis
+          const orientation = getDeploymentOrientation(widthInches, heightInches);
+          const axis = orientation === 'vertical' ? 'vertical' : 'horizontal';
+          const mirrored = getMirroredPosition(placedMirrorPiece.x, placedMirrorPiece.y, widthInches, heightInches, axis);
+          
+          if (isPlacementValidAdjusted(mirrored.x, mirrored.y)) {
+            return { ...piece, x: mirrored.x, y: mirrored.y };
+          }
         }
       }
     }
@@ -318,18 +350,7 @@ const tryPlacePiece = (
       const x = clusterCenter.x + Math.cos(angle) * distance;
       const y = clusterCenter.y + Math.sin(angle) * distance;
 
-      if (
-        isPlacementValid(
-          piece,
-          x,
-          y,
-          placedPieces,
-          widthInches,
-          heightInches,
-          deploymentDepthInches,
-          collisionBufferInches,
-        )
-      ) {
+      if (isPlacementValidAdjusted(x, y)) {
         return { ...piece, x, y };
       }
     }
@@ -350,31 +371,19 @@ const tryPlacePiece = (
       const x = isVertical ? laneCenter.x + acrossLaneOffset : laneCenter.x + alongLaneOffset;
       const y = isVertical ? laneCenter.y + alongLaneOffset : laneCenter.y + acrossLaneOffset;
 
-      if (
-        isPlacementValid(
-          piece,
-          x,
-          y,
-          placedPieces,
-          widthInches,
-          heightInches,
-          deploymentDepthInches,
-          collisionBufferInches,
-        )
-      ) {
+      if (isPlacementValidAdjusted(x, y)) {
         return { ...piece, x, y };
       }
     }
   }
 
-  if (strategy === 'asymmetric' && pieceIndex !== undefined && totalPieces !== undefined) {
-    // Bias toward one side (first 2/3 of pieces go to one half)
-    const denseSide = random() > 0.5 ? 'left' : 'right';
+  if (strategy === 'asymmetric' && pieceIndex !== undefined && totalPieces !== undefined && asymmetricContext) {
+    // Bias toward one side (first 2/3 of pieces go to dense side)
     const isDensePiece = pieceIndex < Math.floor(totalPieces * 0.66);
     
     let boundsMinX: number, boundsMaxX: number;
     if (isDensePiece) {
-      if (denseSide === 'left') {
+      if (asymmetricContext.denseSide === 'left') {
         boundsMinX = placementRadius;
         boundsMaxX = widthInches * 0.55;
       } else {
@@ -382,7 +391,7 @@ const tryPlacePiece = (
         boundsMaxX = widthInches - placementRadius;
       }
     } else {
-      if (denseSide === 'left') {
+      if (asymmetricContext.denseSide === 'left') {
         boundsMinX = widthInches * 0.6;
         boundsMaxX = widthInches - placementRadius;
       } else {
@@ -395,24 +404,30 @@ const tryPlacePiece = (
       const x = randomBetween(boundsMinX, boundsMaxX, random);
       const y = randomBetween(placementRadius, heightInches - placementRadius, random);
 
-      if (
-        isPlacementValid(
-          piece,
-          x,
-          y,
-          placedPieces,
-          widthInches,
-          heightInches,
-          deploymentDepthInches,
-          collisionBufferInches,
-        )
-      ) {
+      if (isPlacementValidAdjusted(x, y)) {
         return { ...piece, x, y };
       }
     }
   }
 
-  // Default placement (random or balanced-coverage)
+  // For pure random strategy, use full table bounds
+  if (strategy === 'random') {
+    for (let attempt = 0; attempt < maxAttemptsPerPiece; attempt += 1) {
+      const x = randomBetween(placementRadius, widthInches - placementRadius, random);
+      const y = randomBetween(placementRadius, heightInches - placementRadius, random);
+
+      if (isPlacementValidAdjusted(x, y)) {
+        return { ...piece, x, y };
+      }
+    }
+    return null;
+  }
+
+  // For balanced-coverage (and its variants), use quarter-based placement
+  if (preferredQuarter === null) {
+    return null;
+  }
+
   const bounds = getQuarterBounds(preferredQuarter, widthInches, heightInches, placementRadius);
 
   if (bounds.minX > bounds.maxX || bounds.minY > bounds.maxY) {
@@ -423,18 +438,7 @@ const tryPlacePiece = (
     const x = randomBetween(bounds.minX, bounds.maxX, random);
     const y = randomBetween(bounds.minY, bounds.maxY, random);
 
-    if (
-      isPlacementValid(
-        piece,
-        x,
-        y,
-        placedPieces,
-        widthInches,
-        heightInches,
-        deploymentDepthInches,
-        collisionBufferInches,
-      )
-    ) {
+    if (isPlacementValidAdjusted(x, y)) {
       return { ...piece, x, y };
     }
   }
@@ -484,8 +488,14 @@ export const generateTerrainLayout = (
   }
 
   for (let layoutAttempt = 0; layoutAttempt < maxLayoutAttempts; layoutAttempt += 1) {
-    const quarterTargets = buildQuarterTargets(targetPieceCount, random);
-    const quarterSequence = buildQuarterSequence(quarterTargets, random);
+    const strategy = placementConfig?.strategy || 'random';
+    
+    // For random strategy, skip quarter targets entirely
+    const useQuarterPlacement = strategy !== 'random' && strategy !== 'asymmetric' && strategy !== 'clustered-zones' && strategy !== 'los-blocking-lanes';
+    
+    const quarterTargets = useQuarterPlacement ? buildQuarterTargets(targetPieceCount, random) : [0, 0, 0, 0] as [number, number, number, number];
+    const quarterSequence = useQuarterPlacement ? buildQuarterSequence(quarterTargets, random) : [];
+    
     const pieceSpecs = buildPieceSpecs(targetPieceCount, random);
     
     // Prioritize cover pieces if configured
@@ -500,17 +510,31 @@ export const generateTerrainLayout = (
     }
     
     const placedPieces: TerrainPiece[] = [];
-    const assignments = pieceSpecs
-      .map((pieceSpec, index) => ({
-        piece: createPiece(pieceSpec, index, random),
-        preferredQuarter: quarterSequence[index]!,
-        index,
-      }))
-      .sort(
-        (left, right) =>
-          left.preferredQuarter - right.preferredQuarter ||
-          right.piece.collisionRadius - left.piece.collisionRadius,
-      );
+    
+    // Create pieces and store original order BEFORE sorting
+    const assignments = pieceSpecs.map((pieceSpec, index) => ({
+      piece: createPiece(pieceSpec, index, random),
+      preferredQuarter: useQuarterPlacement ? (quarterSequence[index] ?? 0) : null,
+      index,
+      originalIndex: index, // Preserve original index for symmetrical mirroring
+    }));
+    
+    // Store original order for symmetrical mirroring
+    const originalPieceOrder = assignments.map(a => a.piece);
+    
+    // Sort assignments for placement efficiency
+    assignments.sort(
+      (left, right) => {
+        if (left.preferredQuarter !== null && right.preferredQuarter !== null) {
+          return left.preferredQuarter - right.preferredQuarter || right.piece.collisionRadius - left.piece.collisionRadius;
+        }
+        return right.piece.collisionRadius - left.piece.collisionRadius;
+      },
+    );
+
+    // For asymmetric strategy, pick dense side once for the entire layout
+    const asymmetricContext: AsymmetricContext | undefined = 
+      strategy === 'asymmetric' ? { denseSide: random() > 0.5 ? 'left' : 'right' } : undefined;
 
     let failedPlacement = false;
 
@@ -527,7 +551,10 @@ export const generateTerrainLayout = (
         random,
         placementConfig,
         assignment.index,
+        assignment.originalIndex,
         targetPieceCount,
+        originalPieceOrder,
+        asymmetricContext,
       );
 
       if (!placedPiece) {

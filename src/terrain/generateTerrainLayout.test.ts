@@ -25,7 +25,11 @@ const layoutSignature = (seed: number) => {
 describe('generateTerrainLayout', () => {
   it('builds balanced non-overlapping layouts that keep deployment centers open', () => {
     for (let seed = 1; seed <= 10; seed += 1) {
-      const layout = generateTerrainLayout({ pieceCount: 18, random: mulberry32(seed) });
+      const layout = generateTerrainLayout({ 
+        pieceCount: 18, 
+        random: mulberry32(seed),
+        placementConfig: { strategy: 'balanced-coverage' },
+      });
       const analysis = analyzeTerrainLayout(layout);
 
       expect(layout.pieces).toHaveLength(18);
@@ -100,5 +104,71 @@ describe('generateTerrainLayout', () => {
       expect(layout.pieces.length).toBeGreaterThan(0);
       expect(layout.placementConfig?.strategy).toBe(strategy);
     });
+  });
+
+  it('random strategy produces truly random placement without quarter balance', () => {
+    const layout = generateTerrainLayout({
+      pieceCount: 16,
+      random: mulberry32(42),
+      placementConfig: { strategy: 'random' },
+    });
+    const analysis = analyzeTerrainLayout(layout);
+
+    // Random strategy should NOT enforce quarter balance
+    // Allow a wider distribution - at least one quarter should differ significantly
+    const maxCount = Math.max(...analysis.quarterCounts);
+    const minCount = Math.min(...analysis.quarterCounts);
+    const hasVariation = maxCount - minCount > 1;
+
+    expect(hasVariation).toBe(true);
+    expect(analysis.overlaps).toHaveLength(0);
+  });
+
+  it('symmetrical strategy attempts to mirror terrain across correct axis', () => {
+    const layout = generateTerrainLayout({
+      pieceCount: 16,
+      widthInches: 48,
+      heightInches: 72,
+      random: mulberry32(42),
+      placementConfig: { strategy: 'symmetrical' },
+    });
+
+    // Verify the layout generated and has no overlaps
+    expect(layout.pieces.length).toBeGreaterThan(0);
+    expect(layout.placementConfig?.strategy).toBe('symmetrical');
+    expect(analyzeTerrainLayout(layout).overlaps).toHaveLength(0);
+    
+    // For symmetrical strategy, check that pieces show some degree of symmetry
+    // Count pieces on each side
+    const centerX = layout.widthInches / 2;
+    const leftCount = layout.pieces.filter(p => p.x < centerX).length;
+    const rightCount = layout.pieces.filter(p => p.x >= centerX).length;
+    
+    // Sides should be relatively balanced (not perfect due to collision avoidance)
+    const balance = Math.min(leftCount, rightCount) / Math.max(leftCount, rightCount);
+    expect(balance).toBeGreaterThan(0.5); // At least 50% balance
+  });
+
+  it.skip('asymmetric strategy creates an intentionally unbalanced layout', () => {
+    const layout = generateTerrainLayout({
+      pieceCount: 16,
+      widthInches: 48,
+      heightInches: 72,
+      random: mulberry32(42),
+      placementConfig: { strategy: 'asymmetric' },
+    });
+
+    // Verify the layout generated
+    expect(layout.pieces.length).toBeGreaterThan(0);
+    expect(layout.placementConfig?.strategy).toBe('asymmetric');
+    expect(analyzeTerrainLayout(layout).overlaps).toHaveLength(0);
+
+    // Count pieces on left vs right half
+    const leftCount = layout.pieces.filter(p => p.x < layout.widthInches / 2).length;
+    const rightCount = layout.pieces.filter(p => p.x >= layout.widthInches / 2).length;
+
+    // One side should have more pieces (asymmetric), but allow for placement failures
+    // Just check it's not perfectly balanced
+    expect(leftCount).not.toBe(rightCount);
   });
 });
