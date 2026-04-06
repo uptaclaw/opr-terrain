@@ -32,13 +32,9 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            set -eu
-            if mkdir -p /var/www/opr-terrain 2>/dev/null; then
-              :
-            else
-              sudo -n mkdir -p /var/www/opr-terrain
-              sudo -n chown "$USER":"$USER" /var/www/opr-terrain
-            fi
+            # Directory should already exist and be owned by deploy user
+            # If not, manual setup is required: sudo mkdir -p /var/www/opr-terrain && sudo chown $USER:$USER /var/www/opr-terrain
+            mkdir -p /var/www/opr-terrain
 
       - name: Deploy static site via rsync
         uses: burnett01/rsync-deployments@6.0.0
@@ -50,55 +46,21 @@ jobs:
           remote_user: ${{ secrets.DEPLOY_USER }}
           remote_key: ${{ secrets.DEPLOY_SSH_KEY }}
 
-      - name: Install nginx config and reload
+      - name: Verify nginx configuration
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            set -eu
-            cat >/tmp/opr-terrain-default.conf <<'EOF'
-            server {
-                listen 80 default_server;
-                listen [::]:80 default_server;
-
-                server_name _;
-                client_max_body_size 100M;
-
-                root /var/www/opr-terrain;
-                index index.html;
-
-                location / {
-                    try_files $uri $uri/ /index.html;
-                }
-
-                location = /health {
-                    access_log off;
-                    default_type text/plain;
-                    return 200 "ok\\n";
-                }
-            }
-            EOF
-
-            if install -m 644 /tmp/opr-terrain-default.conf /etc/nginx/sites-available/default 2>/dev/null; then
-              :
-            else
-              sudo -n install -m 644 /tmp/opr-terrain-default.conf /etc/nginx/sites-available/default
+            # Nginx should already be configured to serve from /var/www/opr-terrain
+            # Verify the configuration is correct
+            if ! curl -fsSL http://localhost/ | grep -q '<title>OPR Terrain</title>'; then
+              echo "Warning: nginx may not be configured correctly for opr-terrain"
+              echo "Manual setup may be required"
+              exit 1
             fi
-
-            if ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default 2>/dev/null; then
-              :
-            else
-              sudo -n ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
-            fi
-
-            if nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1; then
-              :
-            else
-              sudo -n nginx -t
-              sudo -n systemctl reload nginx
-            fi
+            echo "Nginx configuration verified"
 
       - name: Health check
         run: |
