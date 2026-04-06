@@ -2,7 +2,7 @@ import type { LayoutState, TerrainPiece, TerrainTemplate } from '../types/layout
 
 const DEFAULT_TABLE = {
   widthInches: 48,
-  heightInches: 48,
+  heightInches: 72,
   deploymentDepthInches: 12,
   title: 'OPR Terrain Layout',
 } as const;
@@ -129,12 +129,12 @@ export const createDefaultLayout = (): LayoutState => ({
   version: 1,
   table: { ...DEFAULT_TABLE },
   pieces: [
-    createTerrainPiece(terrainCatalog[0], { x: 24, y: 25 }, { name: 'Central Ruins' }),
-    createTerrainPiece(terrainCatalog[1], { x: 15, y: 37 }, { name: 'North Woods' }),
-    createTerrainPiece(terrainCatalog[2], { x: 37, y: 34 }, { name: 'East Hill' }),
-    createTerrainPiece(terrainCatalog[3], { x: 25, y: 16 }, { name: 'Midfield Barricade', rotation: 28 }),
-    createTerrainPiece(terrainCatalog[4], { x: 10, y: 13 }, { name: 'West Bunker' }),
-    createTerrainPiece(terrainCatalog[5], { x: 38, y: 14 }, { name: 'South Crater', rotation: 12 }),
+    createTerrainPiece(terrainCatalog[0], { x: 24, y: 36 }, { name: 'Central Ruins' }),
+    createTerrainPiece(terrainCatalog[1], { x: 15, y: 57 }, { name: 'North Woods' }),
+    createTerrainPiece(terrainCatalog[2], { x: 36, y: 55 }, { name: 'East Hill' }),
+    createTerrainPiece(terrainCatalog[3], { x: 24, y: 24 }, { name: 'Midfield Barricade', rotation: 28 }),
+    createTerrainPiece(terrainCatalog[4], { x: 11, y: 18 }, { name: 'West Bunker' }),
+    createTerrainPiece(terrainCatalog[5], { x: 37, y: 15 }, { name: 'South Crater', rotation: 12 }),
   ],
 });
 
