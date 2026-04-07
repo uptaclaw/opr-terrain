@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { TerrainEditor } from './TerrainEditor';
 import { TABLE_SCENE_MARGIN } from './TableCanvas';
 import { TERRAIN_LIBRARY_MIME_TYPE } from './TerrainLibrarySidebar';
@@ -188,7 +188,27 @@ describe('TerrainEditor', () => {
     expect(screen.queryAllByTestId('terrain-piece')).toHaveLength(0);
   });
 
-  it('rotates the selected piece from the rotation handle and can undo the change', () => {
+  it('clears selection and hides the rotation handle when Escape is pressed', () => {
+    const { container } = render(
+      <TerrainEditor
+        widthInches={48}
+        heightInches={48}
+        deploymentDepthInches={12}
+        initialPieces={[baseWallPiece]}
+      />,
+    );
+
+    selectPiece(container, 'wall-1', 10, 10);
+
+    expect(screen.getByTestId('rotation-handle')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(screen.queryByTestId('rotation-handle')).not.toBeInTheDocument();
+    expect(screen.getByText('None')).toBeInTheDocument();
+  });
+
+  it('rotates the selected piece from the rotation handle and commits the final mouseup angle', () => {
     const { container } = render(
       <TerrainEditor
         widthInches={48}
@@ -201,21 +221,16 @@ describe('TerrainEditor', () => {
     selectPiece(container, 'wall-1', 10, 10);
 
     const rotationHandle = screen.getByTestId('rotation-handle');
-    
-    // Handle is above the piece center (at y = 10 - collisionRadius - 1.7)
-    // Piece center is at (10, 10)
-    // Start rotation from above the piece
-    const startY = 10 - Math.hypot(4, 1) - 1.7; // collision radius is hypot(4,1) for the wall
-    fireEvent.mouseDown(rotationHandle, { button: 0, ...clientPoint(10, startY) });
-    
-    // Drag to the right side to rotate ~90 degrees clockwise
-    // Moving from top to right is 90 degrees clockwise
-    fireEvent.mouseMove(window, clientPoint(10 + 5, 10));
-    
-    // Finish rotation
-    fireEvent.mouseUp(window);
+    const startY = 10 - Math.hypot(4, 1) - 1.7;
+    const finalPointer = clientPoint(15, 10);
 
-    // Check that rotation changed (should be ~90 degrees)
+    fireEvent.mouseDown(rotationHandle, { button: 0, ...clientPoint(10, startY) });
+
+    act(() => {
+      window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, ...finalPointer }));
+      window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, ...finalPointer }));
+    });
+
     const piece = getPiece(container, 'wall-1');
     const rotation = parseFloat(piece?.getAttribute('data-piece-rotation') || '0');
     expect(rotation).toBeGreaterThan(70);

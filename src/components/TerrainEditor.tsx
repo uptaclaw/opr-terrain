@@ -53,6 +53,14 @@ interface DragSession {
   };
 }
 
+interface RotationSession {
+  pieceId: string;
+  originalPieces: TerrainPiece[];
+  startAngle: number;
+  originalRotation: number;
+  latestRotation: number;
+}
+
 interface TerrainLibraryDropPayload {
   templateId: string;
   shapeKind?: TerrainShapeKind;
@@ -118,7 +126,7 @@ export function TerrainEditor({
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragSessionRef = useRef<DragSession | null>(null);
-  const rotationSessionRef = useRef<{ pieceId: string; originalPieces: TerrainPiece[]; startAngle: number; originalRotation: number } | null>(null);
+  const rotationSessionRef = useRef<RotationSession | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -168,6 +176,59 @@ export function TerrainEditor({
       setFeedback(null);
     },
     [commit, selectedPieceId],
+  );
+
+  const resetTransientInteractions = useCallback(() => {
+    const rotationSession = rotationSessionRef.current;
+    const dragSession = dragSessionRef.current;
+
+    if (rotationSession) {
+      setPieces(rotationSession.originalPieces);
+    } else if (dragSession) {
+      setPieces(dragSession.originalPieces);
+    }
+
+    dragSessionRef.current = null;
+    rotationSessionRef.current = null;
+    setDraggingPieceId(null);
+    setRotatingPieceId(null);
+  }, []);
+
+  const clearSelection = useCallback(
+    (cancelInteractions = false) => {
+      if (cancelInteractions) {
+        resetTransientInteractions();
+      }
+
+      setSelectedPieceId(null);
+      setContextMenu(null);
+      setFeedback(null);
+    },
+    [resetTransientInteractions],
+  );
+
+  const getRotationPreview = useCallback(
+    (rotationSession: RotationSession, clientX: number, clientY: number) => {
+      const activePiece = rotationSession.originalPieces.find(
+        (piece) => piece.id === rotationSession.pieceId,
+      );
+      const pointer = toTableCoordinates(clientX, clientY);
+
+      if (!activePiece || !pointer) {
+        return null;
+      }
+
+      const deltaX = pointer.x - activePiece.x;
+      const deltaY = pointer.y - activePiece.y;
+      const currentAngle = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
+      const angleDelta = currentAngle - rotationSession.startAngle;
+
+      return {
+        activePiece,
+        rotation: normalizeRotation(rotationSession.originalRotation + angleDelta),
+      };
+    },
+    [toTableCoordinates],
   );
 
   const handleLayoutGenerated = useCallback(
@@ -243,6 +304,15 @@ export function TerrainEditor({
         return;
       }
 
+      if (event.key === 'Escape') {
+        if (selectedPieceId || contextMenu || draggingPieceId || rotatingPieceId) {
+          event.preventDefault();
+          clearSelection(true);
+        }
+
+        return;
+      }
+
       if ((event.key === 'Delete' || event.key === 'Backspace') && selectedPieceId) {
         event.preventDefault();
         handleDeletePiece(selectedPieceId);
@@ -254,7 +324,16 @@ export function TerrainEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleDeletePiece, handleRedo, handleUndo, selectedPieceId]);
+  }, [
+    clearSelection,
+    contextMenu,
+    draggingPieceId,
+    handleDeletePiece,
+    handleRedo,
+    handleUndo,
+    rotatingPieceId,
+    selectedPieceId,
+  ]);
 
   useEffect(() => {
     if (!contextMenu) {
@@ -269,18 +348,10 @@ export function TerrainEditor({
       setContextMenu(null);
     };
 
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setContextMenu(null);
-      }
-    };
-
     window.addEventListener('mousedown', handleMouseDown);
-    window.addEventListener('keydown', handleEscape);
 
     return () => {
       window.removeEventListener('mousedown', handleMouseDown);
-      window.removeEventListener('keydown', handleEscape);
     };
   }, [contextMenu]);
 
@@ -379,50 +450,51 @@ export function TerrainEditor({
         return;
       }
 
-      const activePiece = rotationSession.originalPieces.find(
-        (piece) => piece.id === rotationSession.pieceId,
-      );
-      const pointer = toTableCoordinates(event.clientX, event.clientY);
+      const preview = getRotationPreview(rotationSession, event.clientX, event.clientY);
 
-      if (!activePiece || !pointer) {
+      if (!preview) {
         return;
       }
 
-      const centerX = activePiece.x;
-      const centerY = activePiece.y;
-      const deltaX = pointer.x - centerX;
-      const deltaY = pointer.y - centerY;
-      const currentAngle = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
-      const angleDelta = currentAngle - rotationSession.startAngle;
-      const newRotation = normalizeRotation(rotationSession.originalRotation + angleDelta);
-      const rotatedPiece = { ...activePiece, rotation: newRotation };
-
-      setPieces(replaceTerrainPiece(rotationSession.originalPieces, rotatedPiece));
+      rotationSession.latestRotation = preview.rotation;
+      setPieces(
+        replaceTerrainPiece(rotationSession.originalPieces, {
+          ...preview.activePiece,
+          rotation: preview.rotation,
+        }),
+      );
     };
 
-    const finishRotation = () => {
+    const finishRotation = (event: MouseEvent) => {
       const rotationSession = rotationSessionRef.current;
 
       if (!rotationSession) {
         return;
       }
 
-      const activePiece = pieces.find((piece) => piece.id === rotationSession.pieceId);
-
-      if (!activePiece) {
-        rotationSessionRef.current = null;
-        setRotatingPieceId(null);
-        return;
-      }
-
-      if (activePiece.rotation === rotationSession.originalRotation) {
-        setPieces(rotationSession.originalPieces);
-      } else {
-        commitPieces(pieces, rotationSession.pieceId);
-      }
+      const preview = getRotationPreview(rotationSession, event.clientX, event.clientY);
+      const activePiece =
+        preview?.activePiece ??
+        rotationSession.originalPieces.find((piece) => piece.id === rotationSession.pieceId);
+      const finalRotation = preview?.rotation ?? rotationSession.latestRotation;
 
       rotationSessionRef.current = null;
       setRotatingPieceId(null);
+
+      if (!activePiece) {
+        return;
+      }
+
+      if (finalRotation === rotationSession.originalRotation) {
+        setPieces(rotationSession.originalPieces);
+        return;
+      }
+
+      const nextPieces = replaceTerrainPiece(rotationSession.originalPieces, {
+        ...activePiece,
+        rotation: finalRotation,
+      });
+      commitPieces(nextPieces, rotationSession.pieceId);
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -432,7 +504,7 @@ export function TerrainEditor({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', finishRotation);
     };
-  }, [commitPieces, pieces, rotatingPieceId, toTableCoordinates]);
+  }, [commitPieces, getRotationPreview, rotatingPieceId]);
 
   const handlePieceMouseDown = useCallback(
     (pieceId: string, event: ReactMouseEvent<SVGGElement>) => {
@@ -486,6 +558,10 @@ export function TerrainEditor({
 
   const handleRotateHandleMouseDown = useCallback(
     (pieceId: string, event: ReactMouseEvent<SVGGElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
+
       const piece = pieces.find((entry) => entry.id === pieceId);
       const pointer = toTableCoordinates(event.clientX, event.clientY);
 
@@ -499,11 +575,15 @@ export function TerrainEditor({
       const deltaY = pointer.y - centerY;
       const startAngle = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
 
+      setSelectedPieceId(pieceId);
+      setContextMenu(null);
+      setFeedback(null);
       rotationSessionRef.current = {
         pieceId,
         originalPieces: pieces,
         startAngle,
         originalRotation: piece.rotation,
+        latestRotation: piece.rotation,
       };
       setRotatingPieceId(pieceId);
     },
@@ -511,9 +591,8 @@ export function TerrainEditor({
   );
 
   const handleCanvasMouseDown = useCallback(() => {
-    setSelectedPieceId(null);
-    setContextMenu(null);
-  }, []);
+    clearSelection();
+  }, [clearSelection]);
 
   const handleCanvasDragOver = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
     if (!isTerrainLibraryDrag(event.dataTransfer)) {
