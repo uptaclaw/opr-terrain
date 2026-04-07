@@ -1,6 +1,7 @@
 import type { TerrainTemplate } from '../types/layout';
 
 export const CUSTOM_PIECES_STORAGE_KEY = 'opr-terrain.custom-pieces.v1';
+export const PRESET_OVERRIDES_STORAGE_KEY = 'opr-terrain.preset-overrides.v1';
 
 const createId = () => globalThis.crypto?.randomUUID?.() ?? `custom-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -10,7 +11,7 @@ export interface CustomPieceDefinition extends TerrainTemplate {
   isCustom: true;
 }
 
-const normalizeCustomPiece = (value: unknown): CustomPieceDefinition | null => {
+const normalizeTemplate = (value: unknown): TerrainTemplate | null => {
   if (typeof value !== 'object' || value === null) {
     return null;
   }
@@ -38,6 +39,18 @@ const normalizeCustomPiece = (value: unknown): CustomPieceDefinition | null => {
     height: typeof obj.height === 'number' ? obj.height : 6,
     defaultRotation: typeof obj.defaultRotation === 'number' ? obj.defaultRotation : 0,
     traits,
+  };
+};
+
+const normalizeCustomPiece = (value: unknown): CustomPieceDefinition | null => {
+  const template = normalizeTemplate(value);
+
+  if (!template) {
+    return null;
+  }
+
+  return {
+    ...template,
     isCustom: true,
   };
 };
@@ -76,6 +89,47 @@ export const persistCustomPieces = (pieces: CustomPieceDefinition[]): boolean =>
     return true;
   } catch (error) {
     console.error('Failed to save custom terrain pieces to localStorage:', error);
+    return false;
+  }
+};
+
+export const loadPresetOverrides = (): Map<string, TerrainTemplate> => {
+  if (!canUseStorage()) {
+    return new Map();
+  }
+
+  try {
+    const raw = window.localStorage.getItem(PRESET_OVERRIDES_STORAGE_KEY);
+    if (!raw) {
+      return new Map();
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return new Map();
+    }
+
+    return new Map(
+      parsed
+        .map(normalizeTemplate)
+        .filter((piece): piece is TerrainTemplate => piece !== null)
+        .map((piece) => [piece.id, piece] as const),
+    );
+  } catch {
+    return new Map();
+  }
+};
+
+export const persistPresetOverrides = (overrides: Iterable<TerrainTemplate>): boolean => {
+  if (!canUseStorage()) {
+    return false;
+  }
+
+  try {
+    window.localStorage.setItem(PRESET_OVERRIDES_STORAGE_KEY, JSON.stringify(Array.from(overrides)));
+    return true;
+  } catch (error) {
+    console.error('Failed to save preset terrain overrides to localStorage:', error);
     return false;
   }
 };

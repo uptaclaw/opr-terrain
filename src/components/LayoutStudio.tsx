@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent as ReactDragEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import {
   cloneLayout,
   convertGeneratedTerrainPieceToLayoutPiece,
@@ -17,17 +24,19 @@ import {
   persistWorkingLayout,
 } from '../lib/layout';
 import {
-  loadCustomPieces,
-  persistCustomPieces,
   addCustomPiece,
-  updateCustomPiece,
   deleteCustomPiece,
   duplicateCustomPiece,
+  loadCustomPieces,
+  loadPresetOverrides,
+  persistCustomPieces,
+  persistPresetOverrides,
+  updateCustomPiece,
   type CustomPieceDefinition,
 } from '../lib/customPieces';
 import type { LayoutState, SavedLayoutRecord, TerrainPiece, TerrainTrait, TerrainTemplate } from '../types/layout';
-import { formatInches, formatTableMeasure, getSceneSize, TableCanvas } from './TableCanvas';
-import { TerrainPaletteTable } from './TerrainPaletteTable';
+import { formatInches, formatTableMeasure, getSceneSize, TABLE_SCENE_MARGIN, TableCanvas } from './TableCanvas';
+import { TERRAIN_LIBRARY_MIME_TYPE, TerrainPaletteTable } from './TerrainPaletteTable';
 import type { PieceFormData } from './TerrainPieceModal';
 import { AutoPlacementGenerator } from './AutoPlacementGenerator';
 import { TerrainSummaryLegend } from './TerrainSummaryLegend';
@@ -114,11 +123,192 @@ const categoryChipClasses: Record<TerrainTrait['category'], string> = {
 const STORAGE_WARNING_MESSAGE =
   'Browser storage is unavailable. Draft and named layouts still work in this tab, but they will not persist after refresh.';
 
+type TerrainLibraryDropPayload = {
+  templateId: string;
+};
+
+type InitialStudioState = {
+  layout: LayoutState;
+  customPieces: CustomPieceDefinition[];
+  presetOverrides: Map<string, TerrainTemplate>;
+  shouldPersistHydratedCustomPieces: boolean;
+};
+
+const isTerrainLibraryDrag = (dataTransfer: DataTransfer | null) =>
+  Boolean(dataTransfer && Array.from(dataTransfer.types ?? []).includes(TERRAIN_LIBRARY_MIME_TYPE));
+
+const parseLibraryDropPayload = (dataTransfer: DataTransfer | null): TerrainLibraryDropPayload | null => {
+  if (!dataTransfer) {
+    return null;
+  }
+
+  const rawPayload = dataTransfer.getData(TERRAIN_LIBRARY_MIME_TYPE);
+
+  if (!rawPayload) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawPayload) as TerrainLibraryDropPayload;
+  } catch {
+    return null;
+  }
+};
+
+const serializeTemplateForComparison = (template: TerrainTemplate) =>
+  JSON.stringify({
+    name: template.name,
+    shape: template.shape,
+    fill: template.fill,
+    stroke: template.stroke,
+    width: template.width,
+    height: template.height,
+    defaultRotation: template.defaultRotation ?? 0,
+    traits: template.traits.map((trait) => ({
+      id: trait.id,
+      label: trait.label,
+      category: trait.category,
+      active: trait.active ?? true,
+    })),
+  });
+
+const areTemplateContentsEqual = (left: TerrainTemplate, right: TerrainTemplate) =>
+  serializeTemplateForComparison(left) === serializeTemplateForComparison(right);
+
+const buildImportedTemplateId = (originalId: string, usedIds: Set<string>) => {
+  let candidate = `url-${originalId}`;
+  let suffix = 2;
+
+  while (usedIds.has(candidate)) {
+    candidate = `url-${originalId}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+};
+
+const toTemplate = ({ isCustom: _isCustom, ...template }: CustomPieceDefinition): TerrainTemplate => template;
+
+const hydrateCustomTemplatesFromLayout = (
+  layout: LayoutState,
+  existingCustomPieces: CustomPieceDefinition[],
+): { layout: LayoutState; customPieces: CustomPieceDefinition[]; didChange: boolean } => {
+  if (!layout.customTemplates?.length) {
+    return {
+      layout,
+      customPieces: existingCustomPieces,
+      didChange: false,
+    };
+  }
+
+  const mergedCustomPieces = [...existingCustomPieces];
+  const usedIds = new Set(mergedCustomPieces.map((piece) => piece.id));
+  const templateIdRemap = new Map<string, string>();
+
+  const hydratedTemplates = layout.customTemplates.map((template) => {
+    const existingPiece = mergedCustomPieces.find((piece) => piece.id === template.id);
+
+    if (!existingPiece) {
+      const importedPiece: CustomPieceDefinition = {
+        ...template,
+        isCustom: true,
+      };
+      mergedCustomPieces.push(importedPiece);
+      usedIds.add(importedPiece.id);
+      return importedPiece;
+    }
+
+    if (areTemplateContentsEqual(existingPiece, template)) {
+      return existingPiece;
+    }
+
+    const existingImportedPiece = mergedCustomPieces.find(
+      (piece) => piece.id.startsWith(`url-${template.id}`) && areTemplateContentsEqual(piece, template),
+    );
+
+    if (existingImportedPiece) {
+      templateIdRemap.set(template.id, existingImportedPiece.id);
+      return existingImportedPiece;
+    }
+
+    const importedId = buildImportedTemplateId(template.id, usedIds);
+    const importedPiece: CustomPieceDefinition = {
+      ...template,
+      id: importedId,
+      name: `${template.name} (from URL)`,
+      isCustom: true,
+    };
+
+    mergedCustomPieces.push(importedPiece);
+    usedIds.add(importedId);
+    templateIdRemap.set(template.id, importedId);
+    return importedPiece;
+  });
+
+  const nextLayout: LayoutState = {
+    ...layout,
+    pieces:
+      templateIdRemap.size > 0
+        ? layout.pieces.map((piece) => {
+            const remappedTemplateId = templateIdRemap.get(piece.templateId);
+
+            if (!remappedTemplateId) {
+              return piece;
+            }
+
+            return {
+              ...piece,
+              templateId: remappedTemplateId,
+            };
+          })
+        : layout.pieces,
+    customTemplates: hydratedTemplates.map(toTemplate),
+  };
+
+  return {
+    layout: nextLayout,
+    customPieces: mergedCustomPieces,
+    didChange: mergedCustomPieces.length !== existingCustomPieces.length || templateIdRemap.size > 0,
+  };
+};
+
+const buildLayoutWithCustomTemplates = (layout: LayoutState, customPieces: CustomPieceDefinition[]): LayoutState => {
+  const customTemplatesInUse = customPieces.filter((customPiece) =>
+    layout.pieces.some((piece) => piece.templateId === customPiece.id),
+  );
+
+  if (customTemplatesInUse.length === 0) {
+    const { customTemplates: _unusedCustomTemplates, ...layoutWithoutCustomTemplates } = layout;
+    return layoutWithoutCustomTemplates;
+  }
+
+  return {
+    ...layout,
+    customTemplates: customTemplatesInUse.map(toTemplate),
+  };
+};
+
+const createInitialStudioState = (): InitialStudioState => {
+  const initialLayout = getInitialLayout();
+  const storedCustomPieces = loadCustomPieces();
+  const hydratedState = hydrateCustomTemplatesFromLayout(initialLayout, storedCustomPieces);
+
+  return {
+    layout: hydratedState.layout,
+    customPieces: hydratedState.customPieces,
+    presetOverrides: loadPresetOverrides(),
+    shouldPersistHydratedCustomPieces: hydratedState.didChange,
+  };
+};
+
 export function LayoutStudio() {
-  const [layout, setLayout] = useState<LayoutState>(() => getInitialLayout());
+  const [initialStudioState] = useState(createInitialStudioState);
+  const [layout, setLayout] = useState<LayoutState>(initialStudioState.layout);
   const [savedLayouts, setSavedLayouts] = useState<SavedLayoutRecord[]>(() => loadSavedLayouts());
-  const [customPieces, setCustomPieces] = useState<CustomPieceDefinition[]>(() => loadCustomPieces());
-  const [presetOverrides, setPresetOverrides] = useState<Map<string, Partial<TerrainTemplate>>>(new Map());
+  const [customPieces, setCustomPieces] = useState<CustomPieceDefinition[]>(initialStudioState.customPieces);
+  const [presetOverrides, setPresetOverrides] = useState<Map<string, TerrainTemplate>>(
+    () => new Map(initialStudioState.presetOverrides),
+  );
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
   const [activeSavedLayoutId, setActiveSavedLayoutId] = useState<string | null>(null);
   const [layoutNameInput, setLayoutNameInput] = useState('');
@@ -127,14 +317,30 @@ export function LayoutStudio() {
   );
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [libraryDragActive, setLibraryDragActive] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const cleanSvgRef = useRef<SVGSVGElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
   const layoutRef = useRef(layout);
+  const customPiecesRef = useRef(customPieces);
 
   useEffect(() => {
     layoutRef.current = layout;
   }, [layout]);
+
+  useEffect(() => {
+    customPiecesRef.current = customPieces;
+  }, [customPieces]);
+
+  useEffect(() => {
+    if (!initialStudioState.shouldPersistHydratedCustomPieces) {
+      return;
+    }
+
+    if (!persistCustomPieces(initialStudioState.customPieces)) {
+      setStorageWarning(STORAGE_WARNING_MESSAGE);
+    }
+  }, [initialStudioState]);
 
   useEffect(() => {
     setSelectedPieceId((current) => {
@@ -147,18 +353,10 @@ export function LayoutStudio() {
   }, [layout.pieces]);
 
   useEffect(() => {
-    // Include custom templates for pieces that reference them
-    const customTemplatesInUse = customPieces.filter((custom) =>
-      layout.pieces.some((piece) => piece.templateId === custom.id)
-    );
-    
-    const layoutWithCustoms: LayoutState = {
-      ...layout,
-      ...(customTemplatesInUse.length > 0 ? { customTemplates: customTemplatesInUse } : {}),
-    };
-    
-    setStorageWarning(persistWorkingLayout(layoutWithCustoms) ? null : STORAGE_WARNING_MESSAGE);
-    updateHash(layoutWithCustoms);
+    const layoutWithCustomTemplates = buildLayoutWithCustomTemplates(layout, customPieces);
+
+    setStorageWarning(persistWorkingLayout(layoutWithCustomTemplates) ? null : STORAGE_WARNING_MESSAGE);
+    updateHash(layoutWithCustomTemplates);
   }, [layout, customPieces]);
 
   useEffect(() => {
@@ -169,34 +367,16 @@ export function LayoutStudio() {
         return;
       }
 
-      setLayout(fromHash);
+      const hydratedState = hydrateCustomTemplatesFromLayout(fromHash, customPiecesRef.current);
+
+      setLayout(hydratedState.layout);
+      setCustomPieces(hydratedState.customPieces);
       setActiveSavedLayoutId(null);
       setLayoutNameInput('');
       setStatusMessage('Loaded a shared layout from the URL.');
-      
-      // Load custom templates from the shared layout with namespacing to avoid collisions
-      if (fromHash.customTemplates && fromHash.customTemplates.length > 0) {
-        setCustomPieces((prev) => {
-          const merged = [...prev];
-          fromHash.customTemplates!.forEach((template) => {
-            // Check for ID collision
-            const existing = merged.find((p) => p.id === template.id);
-            if (existing) {
-              // ID collision - create with url-prefixed ID to ensure shared layout renders correctly
-              const namespacedTemplate = {
-                ...template,
-                id: `url-${template.id}`,
-                name: `${template.name} (from URL)`,
-                isCustom: true as const,
-              };
-              merged.push(namespacedTemplate);
-            } else {
-              merged.push({ ...template, isCustom: true } as CustomPieceDefinition);
-            }
-          });
-          persistCustomPieces(merged.filter((p) => p.isCustom) as CustomPieceDefinition[]);
-          return merged;
-        });
+
+      if (hydratedState.didChange && !persistCustomPieces(hydratedState.customPieces)) {
+        setStorageWarning(STORAGE_WARNING_MESSAGE);
       }
     };
 
@@ -204,6 +384,20 @@ export function LayoutStudio() {
 
     return () => {
       window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const clearLibraryDrag = () => {
+      setLibraryDragActive(false);
+    };
+
+    window.addEventListener('dragend', clearLibraryDrag);
+    window.addEventListener('drop', clearLibraryDrag);
+
+    return () => {
+      window.removeEventListener('dragend', clearLibraryDrag);
+      window.removeEventListener('drop', clearLibraryDrag);
     };
   }, []);
 
@@ -272,18 +466,49 @@ export function LayoutStudio() {
     [layout.pieces, selectedPieceId],
   );
 
-  const shareUrl = useMemo(() => {
-    const customTemplatesInUse = customPieces.filter((custom) =>
-      layout.pieces.some((piece) => piece.templateId === custom.id)
+  const resolvedPresets = useMemo(
+    () =>
+      terrainCatalog.map((preset) => {
+        const override = presetOverrides.get(preset.id);
+        return override ? { ...preset, ...override } : preset;
+      }),
+    [presetOverrides],
+  );
+
+  const getTemplateById = (templateId: string) =>
+    customPieces.find((piece) => piece.id === templateId) ?? resolvedPresets.find((piece) => piece.id === templateId);
+
+  const getDropPosition = (clientX: number, clientY: number) => {
+    const svgElement = svgRef.current;
+
+    if (!svgElement) {
+      return null;
+    }
+
+    const rect = svgElement.getBoundingClientRect();
+
+    if (!rect.width || !rect.height) {
+      return null;
+    }
+
+    const { sceneWidth, sceneHeight } = getSceneSize(
+      layoutRef.current.table.widthInches,
+      layoutRef.current.table.heightInches,
     );
-    
-    const layoutWithCustoms: LayoutState = {
-      ...layout,
-      ...(customTemplatesInUse.length > 0 ? { customTemplates: customTemplatesInUse } : {}),
+    const sceneX = ((clientX - rect.left) / rect.width) * sceneWidth;
+    const sceneY = ((clientY - rect.top) / rect.height) * sceneHeight;
+
+    return {
+      x: sceneX - TABLE_SCENE_MARGIN.left,
+      y: layoutRef.current.table.heightInches - (sceneY - TABLE_SCENE_MARGIN.top),
     };
-    
-    return createShareUrl(layoutWithCustoms);
-  }, [layout, customPieces]);
+  };
+
+  const shareUrl = useMemo(
+    () => createShareUrl(buildLayoutWithCustomTemplates(layout, customPieces)),
+    [layout, customPieces],
+  );
+
   const shareUrlPreview = useMemo(() => {
     try {
       const url = new URL(shareUrl);
@@ -314,17 +539,8 @@ export function LayoutStudio() {
     }));
   };
 
-  const handleAddPiece = (templateId: string) => {
-    // First check custom pieces, then fall back to catalog (with overrides applied)
-    let template: TerrainTemplate | undefined = customPieces.find((p) => p.id === templateId);
-    if (!template) {
-      template = getTerrainTemplate(templateId);
-      // Apply preset override if exists
-      const override = presetOverrides.get(templateId);
-      if (template && override) {
-        template = { ...template, ...override };
-      }
-    }
+  const handleAddPiece = (templateId: string, position?: { x: number; y: number }) => {
+    const template = getTemplateById(templateId);
 
     if (!template) {
       return;
@@ -333,8 +549,8 @@ export function LayoutStudio() {
     let nextPieceId: string | null = null;
 
     setLayout((current) => {
-      const position = getSuggestedPosition(current.pieces.length, current);
-      const newPiece = clampPieceToTable(createTerrainPiece(template!, position), current);
+      const nextPosition = position ?? getSuggestedPosition(current.pieces.length, current);
+      const newPiece = clampPieceToTable(createTerrainPiece(template, nextPosition), current);
       nextPieceId = newPiece.id;
       return {
         ...current,
@@ -347,6 +563,38 @@ export function LayoutStudio() {
     }
 
     setStatusMessage(`Added ${template.name.toLowerCase()} terrain.`);
+  };
+
+  const handleCanvasDragOver = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!isTerrainLibraryDrag(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setLibraryDragActive(true);
+  };
+
+  const handleCanvasDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (isTerrainLibraryDrag(event.dataTransfer)) {
+      event.preventDefault();
+    }
+
+    setLibraryDragActive(false);
+
+    const payload = parseLibraryDropPayload(event.dataTransfer);
+
+    if (!payload) {
+      return;
+    }
+
+    const dropPosition = getDropPosition(event.clientX, event.clientY);
+
+    if (!dropPosition) {
+      return;
+    }
+
+    handleAddPiece(payload.templateId, dropPosition);
   };
 
   const handleDuplicateSelectedPiece = () => {
@@ -414,23 +662,42 @@ export function LayoutStudio() {
   };
 
   const handleEditPiece = (id: string, data: PieceFormData) => {
-    // Check if it's a custom piece
-    const customPiece = customPieces.find((p) => p.id === id);
+    const customPiece = customPieces.find((piece) => piece.id === id);
+
     if (customPiece) {
       updateCustomPiece(id, data);
-      setCustomPieces((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, ...data } : p))
-      );
+      setCustomPieces((prev) => prev.map((piece) => (piece.id === id ? { ...piece, ...data, isCustom: true } : piece)));
       setStatusMessage(`Updated custom piece: ${data.name}`);
-    } else {
-      // It's a preset - add session-only override
-      setPresetOverrides((prev) => {
-        const updated = new Map(prev);
-        updated.set(id, data);
-        return updated;
-      });
-      setStatusMessage(`Updated preset: ${data.name} (session only)`);
+      return;
     }
+
+    const presetTemplate = resolvedPresets.find((piece) => piece.id === id) ?? getTerrainTemplate(id);
+
+    if (!presetTemplate) {
+      return;
+    }
+
+    const nextPresetOverrides = new Map(presetOverrides);
+    nextPresetOverrides.set(id, {
+      ...presetTemplate,
+      ...data,
+      id,
+      defaultRotation: data.defaultRotation ?? presetTemplate.defaultRotation,
+      traits: data.traits,
+    });
+
+    const persisted = persistPresetOverrides(nextPresetOverrides.values());
+    setPresetOverrides(nextPresetOverrides);
+
+    if (!persisted) {
+      setStorageWarning(STORAGE_WARNING_MESSAGE);
+    }
+
+    setStatusMessage(
+      persisted
+        ? `Updated preset: ${data.name}`
+        : `Updated preset: ${data.name} for this tab, but browser storage is unavailable so it will not persist after refresh.`,
+    );
   };
 
   const handleDeleteCustomPiece = (id: string) => {
@@ -441,19 +708,18 @@ export function LayoutStudio() {
   };
 
   const handleDuplicatePiece = (id: string) => {
-    // First check if it's a custom piece
-    let sourcePiece = customPieces.find((p) => p.id === id);
-    if (sourcePiece) {
+    const sourceCustomPiece = customPieces.find((piece) => piece.id === id);
+
+    if (sourceCustomPiece) {
       const duplicate = duplicateCustomPiece(id);
       if (duplicate) {
         setCustomPieces((prev) => [...prev, duplicate]);
-        setStatusMessage(`Duplicated ${sourcePiece!.name}`);
+        setStatusMessage(`Duplicated ${sourceCustomPiece.name}`);
       }
       return;
     }
 
-    // It's a preset - create a custom copy
-    const presetPiece = terrainCatalog.find((p) => p.id === id);
+    const presetPiece = resolvedPresets.find((piece) => piece.id === id);
     if (presetPiece) {
       const newCustomPiece = addCustomPiece({
         name: `${presetPiece.name} (Copy)`,
@@ -922,10 +1188,7 @@ export function LayoutStudio() {
           </section>
 
           <TerrainPaletteTable
-            presets={terrainCatalog.map(preset => {
-              const override = presetOverrides.get(preset.id);
-              return override ? { ...preset, ...override } : preset;
-            })}
+            presets={resolvedPresets}
             customPieces={customPieces}
             onAddCustom={handleAddCustomPiece}
             onEditPiece={handleEditPiece}
@@ -960,6 +1223,9 @@ export function LayoutStudio() {
               pieces={layout.pieces}
               selectedPieceId={selectedPieceId}
               svgRef={svgRef}
+              libraryDragActive={libraryDragActive}
+              onCanvasDragOver={handleCanvasDragOver}
+              onCanvasDrop={handleCanvasDrop}
               onPiecePointerDown={handlePiecePointerDown}
               onPieceSelect={setSelectedPieceId}
             />

@@ -550,6 +550,11 @@ export function TableCanvas({
                 return (
                   <g
                     key={piece.id}
+                    data-testid="layout-terrain-piece"
+                    data-piece-id={piece.id}
+                    data-piece-template-id={piece.templateId}
+                    data-piece-name={piece.name}
+                    data-piece-rotation={piece.rotation}
                     transform={`translate(${pieceX} ${pieceY}) rotate(${piece.rotation})`}
                     onPointerDown={
                       onPiecePointerDown
@@ -669,7 +674,7 @@ export function TableCanvas({
             })()
           ) : null}
 
-          {editorMode && libraryDragActive ? (
+          {libraryDragActive ? (
             <g pointerEvents="none">
               <rect
                 x={tableX}

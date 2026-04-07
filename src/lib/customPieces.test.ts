@@ -4,7 +4,9 @@ import {
   deleteCustomPiece,
   duplicateCustomPiece,
   loadCustomPieces,
+  loadPresetOverrides,
   persistCustomPieces,
+  persistPresetOverrides,
   updateCustomPiece,
   type CustomPieceDefinition,
 } from './customPieces';
@@ -306,6 +308,41 @@ describe('customPieces', () => {
       const loaded = loadCustomPieces();
       expect(loaded).toHaveLength(1);
       expect(loaded[0]).toEqual(piece);
+    });
+  });
+
+  describe('preset overrides', () => {
+    it('persists and reloads preset overrides by template id', () => {
+      expect(
+        persistPresetOverrides([
+          {
+            id: 'barricade',
+            name: 'Barricade Deluxe',
+            shape: 'rect',
+            fill: '#f59e0b',
+            stroke: '#fef3c7',
+            width: 7,
+            height: 2.5,
+            defaultRotation: 18,
+            traits: [
+              { id: 'light-cover', label: 'Light cover', category: 'cover', active: true },
+              { id: 'passable', label: 'Passable obstacle', category: 'movement', active: true },
+            ],
+          },
+        ]),
+      ).toBe(true);
+
+      const loaded = loadPresetOverrides();
+      expect(loaded.get('barricade')).toMatchObject({
+        id: 'barricade',
+        name: 'Barricade Deluxe',
+        defaultRotation: 18,
+      });
+    });
+
+    it('handles corrupted preset override storage gracefully', () => {
+      window.localStorage.setItem('opr-terrain.preset-overrides.v1', 'not-json');
+      expect(loadPresetOverrides()).toEqual(new Map());
     });
   });
 });
