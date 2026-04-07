@@ -1,10 +1,109 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { LayoutStudio } from './LayoutStudio';
+import { TABLE_SCENE_MARGIN } from './TableCanvas';
+import { TERRAIN_LIBRARY_MIME_TYPE } from './TerrainPaletteTable';
+import { createDefaultLayout, createTerrainPiece } from '../data/terrainCatalog';
+import { CUSTOM_PIECES_STORAGE_KEY, PRESET_OVERRIDES_STORAGE_KEY } from '../lib/customPieces';
+import { encodeLayoutHash } from '../lib/layout';
+import type { TerrainTemplate } from '../types/layout';
+
+const clientPoint = (tableX: number, tableY: number) => ({
+  clientX: (TABLE_SCENE_MARGIN.left + tableX) * 10,
+  clientY: (TABLE_SCENE_MARGIN.top + tableY) * 10,
+});
+
+const createDataTransfer = (
+  options: {
+    hideCustomPayloadDuringDragOver?: boolean;
+  } = {},
+) => {
+  const store = new Map<string, string>();
+  let dragPhase: 'dragover' | 'drop' | null = null;
+
+  const dataTransfer = {
+    dropEffect: 'none',
+    effectAllowed: 'all',
+    files: [],
+    items: [],
+    types: [] as string[],
+    clearData(format?: string) {
+      if (format) {
+        store.delete(format);
+      } else {
+        store.clear();
+      }
+
+      dataTransfer.types = [...store.keys()];
+    },
+    getData(format: string) {
+      if (
+        options.hideCustomPayloadDuringDragOver &&
+        dragPhase === 'dragover' &&
+        format === TERRAIN_LIBRARY_MIME_TYPE
+      ) {
+        return '';
+      }
+
+      return store.get(format) ?? '';
+    },
+    setData(format: string, data: string) {
+      store.set(format, data);
+      dataTransfer.types = [...store.keys()];
+    },
+    setDragImage() {},
+  };
+
+  return {
+    dataTransfer: dataTransfer as unknown as DataTransfer,
+    setPhase(phase: 'dragover' | 'drop' | null) {
+      dragPhase = phase;
+    },
+  };
+};
+
+const dispatchDragEvent = (
+  element: Element,
+  type: 'dragover' | 'drop',
+  dataTransfer: DataTransfer,
+  point: { clientX: number; clientY: number },
+) => {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+
+  Object.defineProperties(event, {
+    dataTransfer: {
+      value: dataTransfer,
+    },
+    clientX: {
+      value: point.clientX,
+    },
+    clientY: {
+      value: point.clientY,
+    },
+  });
+
+  fireEvent(element, event);
+
+  return event;
+};
+
+const getCustomLibraryRows = () =>
+  screen
+    .getAllByTestId(/^library-item-/)
+    .filter((row) => within(row).queryByRole('button', { name: /delete/i }));
 
 describe('LayoutStudio', () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.history.replaceState(window.history.state, '', '/');
+
+    vi.spyOn(SVGSVGElement.prototype, 'getBoundingClientRect').mockReturnValue(
+      DOMRect.fromRect({
+        x: 0,
+        y: 0,
+        width: 590,
+        height: 830,
+      }),
+    );
   });
 
   afterEach(() => {
@@ -109,5 +208,131 @@ describe('LayoutStudio', () => {
     expect(screen.getAllByText('Marsh').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Outcrop').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Hedge').length).toBeGreaterThan(0);
+  });
+
+  it('hydrates shared custom templates from the URL on initial load', () => {
+    const sharedTemplate: TerrainTemplate = {
+      id: 'shared-spire',
+      name: 'Shared Spire',
+      shape: 'diamond',
+      fill: '#123456',
+      stroke: '#abcdef',
+      width: 8,
+      height: 6,
+      defaultRotation: 0,
+      traits: [{ id: 'blocks-los', label: 'Blocks line of sight', category: 'los', active: true }],
+    };
+    const sharedLayout = createDefaultLayout();
+    sharedLayout.pieces = [...sharedLayout.pieces, createTerrainPiece(sharedTemplate, { x: 18, y: 28 })];
+    sharedLayout.customTemplates = [sharedTemplate];
+
+    window.history.replaceState(window.history.state, '', `/#${encodeLayoutHash(sharedLayout)}`);
+
+    render(<LayoutStudio />);
+
+    expect(screen.getByTestId('library-item-shared-spire')).toBeInTheDocument();
+    expect(within(screen.getByTestId('library-item-shared-spire')).getByText('Shared Spire')).toBeInTheDocument();
+  });
+
+  it('adds terrain pieces to the canvas when rows are dragged from the palette', () => {
+    render(<LayoutStudio />);
+
+    const [interactiveCanvas] = screen.getAllByTestId('table-canvas-svg');
+    const [dropzone] = screen.getAllByTestId('table-canvas-dropzone');
+    const initialPieceCount = interactiveCanvas.querySelectorAll('[data-testid="layout-terrain-piece"]').length;
+    const libraryItem = screen.getByTestId('library-item-ruins');
+    const { dataTransfer, setPhase } = createDataTransfer({
+      hideCustomPayloadDuringDragOver: true,
+    });
+
+    fireEvent.dragStart(libraryItem, { dataTransfer });
+    setPhase('dragover');
+    const dragOverEvent = dispatchDragEvent(dropzone, 'dragover', dataTransfer, clientPoint(16, 20));
+
+    expect(dragOverEvent.defaultPrevented).toBe(true);
+
+    setPhase('drop');
+    dispatchDragEvent(dropzone, 'drop', dataTransfer, clientPoint(16, 20));
+    setPhase(null);
+
+    expect(interactiveCanvas.querySelectorAll('[data-testid="layout-terrain-piece"]')).toHaveLength(initialPieceCount + 1);
+    expect(interactiveCanvas.querySelector('[data-testid="layout-terrain-piece"][data-piece-name="Ruins"]')).toBeInTheDocument();
+    expect(screen.getByText(/added ruins terrain/i)).toBeInTheDocument();
+  });
+
+  it('persists preset overrides and reapplies them after remount', () => {
+    const firstView = render(<LayoutStudio />);
+    const barricadeRow = screen.getByTestId('library-item-barricade');
+
+    fireEvent.click(within(barricadeRow).getByRole('button', { name: /edit/i }));
+    fireEvent.change(screen.getByLabelText(/^name$/i), {
+      target: { value: 'Barricade Deluxe' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(screen.getByText(/updated preset: barricade deluxe/i)).toBeInTheDocument();
+    expect(window.localStorage.getItem(PRESET_OVERRIDES_STORAGE_KEY)).toContain('Barricade Deluxe');
+
+    firstView.unmount();
+
+    const { container } = render(<LayoutStudio />);
+    const reloadedBarricadeRow = screen.getByTestId('library-item-barricade');
+
+    expect(within(reloadedBarricadeRow).getByText('Barricade Deluxe')).toBeInTheDocument();
+
+    fireEvent.click(within(reloadedBarricadeRow).getByRole('button', { name: /add/i }));
+
+    expect(
+      container.querySelector(
+        '[data-testid="layout-terrain-piece"][data-piece-name="Barricade Deluxe"][data-piece-template-id="barricade"][data-piece-rotation="18"]',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('opens duplicate as a draft and only persists it after save', () => {
+    render(<LayoutStudio />);
+    const barricadeRow = screen.getByTestId('library-item-barricade');
+    const initialCustomPieceCount = getCustomLibraryRows().length;
+
+    fireEvent.click(within(barricadeRow).getByRole('button', { name: /duplicate/i }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByDisplayValue('Barricade (Copy)')).toBeInTheDocument();
+    expect(within(dialog).getByDisplayValue('7')).toBeInTheDocument();
+    expect(within(dialog).getByDisplayValue('2.5')).toBeInTheDocument();
+    expect(getCustomLibraryRows()).toHaveLength(initialCustomPieceCount);
+    expect(window.localStorage.getItem(CUSTOM_PIECES_STORAGE_KEY)).toBeNull();
+
+    fireEvent.change(within(dialog).getByLabelText(/^name$/i), {
+      target: { value: 'My Custom Barricade' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /^create$/i }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(getCustomLibraryRows()).toHaveLength(initialCustomPieceCount + 1);
+
+    const duplicatedRow = getCustomLibraryRows().find((row) => within(row).queryByText('My Custom Barricade'));
+
+    expect(duplicatedRow).toBeDefined();
+    expect(within(duplicatedRow!).getByText('My Custom Barricade')).toBeInTheDocument();
+    expect(window.localStorage.getItem(CUSTOM_PIECES_STORAGE_KEY)).toContain('My Custom Barricade');
+  });
+
+  it('allows canceling a duplicate draft without creating a custom piece', () => {
+    render(<LayoutStudio />);
+    const craterRow = screen.getByTestId('library-item-crater');
+    const initialCustomPieceCount = getCustomLibraryRows().length;
+
+    fireEvent.click(within(craterRow).getByRole('button', { name: /duplicate/i }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByDisplayValue('Crater (Copy)')).toBeInTheDocument();
+    expect(getCustomLibraryRows()).toHaveLength(initialCustomPieceCount);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(getCustomLibraryRows()).toHaveLength(initialCustomPieceCount);
+    expect(window.localStorage.getItem(CUSTOM_PIECES_STORAGE_KEY)).toBeNull();
   });
 });

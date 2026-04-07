@@ -114,6 +114,42 @@ const normalizePlacementConfig = (value: unknown): PlacementConfig | undefined =
   };
 };
 
+const normalizeTemplate = (value: unknown): import('../types/layout').TerrainTemplate | null => {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  const shape = value.shape;
+  if (shape !== 'rect' && shape !== 'ellipse' && shape !== 'diamond') {
+    return null;
+  }
+
+  const rawTraits = Array.isArray(value.traits) ? value.traits : [];
+  const traits = rawTraits.map((t) => {
+    if (!isObject(t)) {
+      return null;
+    }
+    return {
+      id: coerceString(t.id, 'trait'),
+      label: coerceString(t.label, 'Trait'),
+      category: t.category === 'cover' || t.category === 'movement' || t.category === 'los' ? t.category : 'cover',
+      ...(typeof t.active === 'boolean' ? { active: t.active } : {}),
+    };
+  }).filter((t): t is Omit<TerrainTrait, 'active'> & { active?: boolean } => t !== null);
+
+  return {
+    id: coerceString(value.id, `template-${Math.random().toString(36).slice(2, 8)}`),
+    name: coerceString(value.name, 'Template'),
+    shape,
+    fill: coerceString(value.fill, '#475569'),
+    stroke: coerceString(value.stroke, '#f8fafc'),
+    width: coerceNumber(value.width, 6, 1.5, 24),
+    height: coerceNumber(value.height, 6, 1.5, 24),
+    defaultRotation: typeof value.defaultRotation === 'number' ? value.defaultRotation : undefined,
+    traits,
+  };
+};
+
 export const normalizeLayout = (value: unknown): LayoutState | null => {
   if (!isObject(value)) {
     return null;
@@ -125,11 +161,16 @@ export const normalizeLayout = (value: unknown): LayoutState | null => {
 
   const placementConfig = normalizePlacementConfig(value.placementConfig);
 
+  const customTemplates = Array.isArray(value.customTemplates)
+    ? value.customTemplates.map(normalizeTemplate).filter((t): t is import('../types/layout').TerrainTemplate => t !== null)
+    : undefined;
+
   return {
     version: 1,
     table: normalizeTable(value.table),
     pieces,
     ...(placementConfig && Object.keys(placementConfig).length > 0 ? { placementConfig } : {}),
+    ...(customTemplates && customTemplates.length > 0 ? { customTemplates } : {}),
   };
 };
 

@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent as ReactDragEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import {
   cloneLayout,
   convertGeneratedTerrainPieceToLayoutPiece,
@@ -16,8 +23,20 @@ import {
   persistSavedLayouts,
   persistWorkingLayout,
 } from '../lib/layout';
-import type { LayoutState, SavedLayoutRecord, TerrainPiece, TerrainTrait } from '../types/layout';
-import { formatInches, formatTableMeasure, getSceneSize, TableCanvas } from './TableCanvas';
+import {
+  addCustomPiece,
+  deleteCustomPiece,
+  loadCustomPieces,
+  loadPresetOverrides,
+  persistCustomPieces,
+  persistPresetOverrides,
+  updateCustomPiece,
+  type CustomPieceDefinition,
+} from '../lib/customPieces';
+import type { LayoutState, SavedLayoutRecord, TerrainPiece, TerrainTrait, TerrainTemplate } from '../types/layout';
+import { formatInches, formatTableMeasure, getSceneSize, TABLE_SCENE_MARGIN, TableCanvas } from './TableCanvas';
+import { TERRAIN_LIBRARY_MIME_TYPE, TerrainPaletteTable } from './TerrainPaletteTable';
+import type { PieceFormData } from './TerrainPieceModal';
 import { AutoPlacementGenerator } from './AutoPlacementGenerator';
 import { TerrainSummaryLegend } from './TerrainSummaryLegend';
 import type { TerrainLayout } from '../terrain/types';
@@ -103,9 +122,198 @@ const categoryChipClasses: Record<TerrainTrait['category'], string> = {
 const STORAGE_WARNING_MESSAGE =
   'Browser storage is unavailable. Draft and named layouts still work in this tab, but they will not persist after refresh.';
 
+type TerrainLibraryDropPayload = {
+  templateId: string;
+};
+
+type InitialStudioState = {
+  layout: LayoutState;
+  customPieces: CustomPieceDefinition[];
+  presetOverrides: Map<string, TerrainTemplate>;
+  shouldPersistHydratedCustomPieces: boolean;
+};
+
+const isTerrainLibraryDrag = (dataTransfer: DataTransfer | null) =>
+  Boolean(dataTransfer && Array.from(dataTransfer.types ?? []).includes(TERRAIN_LIBRARY_MIME_TYPE));
+
+const parseLibraryDropPayload = (dataTransfer: DataTransfer | null): TerrainLibraryDropPayload | null => {
+  if (!dataTransfer) {
+    return null;
+  }
+
+  const rawPayload = dataTransfer.getData(TERRAIN_LIBRARY_MIME_TYPE);
+
+  if (!rawPayload) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawPayload) as TerrainLibraryDropPayload;
+  } catch {
+    return null;
+  }
+};
+
+const serializeTemplateForComparison = (template: TerrainTemplate) =>
+  JSON.stringify({
+    name: template.name,
+    shape: template.shape,
+    fill: template.fill,
+    stroke: template.stroke,
+    width: template.width,
+    height: template.height,
+    defaultRotation: template.defaultRotation ?? 0,
+    traits: template.traits.map((trait) => ({
+      id: trait.id,
+      label: trait.label,
+      category: trait.category,
+      active: trait.active ?? true,
+    })),
+  });
+
+const areTemplateContentsEqual = (left: TerrainTemplate, right: TerrainTemplate) =>
+  serializeTemplateForComparison(left) === serializeTemplateForComparison(right);
+
+const buildImportedTemplateId = (originalId: string, usedIds: Set<string>) => {
+  let candidate = `url-${originalId}`;
+  let suffix = 2;
+
+  while (usedIds.has(candidate)) {
+    candidate = `url-${originalId}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+};
+
+const toTemplate = ({ isCustom: _isCustom, ...template }: CustomPieceDefinition): TerrainTemplate => template;
+
+const createDuplicateDraft = (template: TerrainTemplate): TerrainTemplate => ({
+  ...template,
+  name: `${template.name} (Copy)`,
+  traits: template.traits.map((trait) => ({ ...trait })),
+});
+
+const hydrateCustomTemplatesFromLayout = (
+  layout: LayoutState,
+  existingCustomPieces: CustomPieceDefinition[],
+): { layout: LayoutState; customPieces: CustomPieceDefinition[]; didChange: boolean } => {
+  if (!layout.customTemplates?.length) {
+    return {
+      layout,
+      customPieces: existingCustomPieces,
+      didChange: false,
+    };
+  }
+
+  const mergedCustomPieces = [...existingCustomPieces];
+  const usedIds = new Set(mergedCustomPieces.map((piece) => piece.id));
+  const templateIdRemap = new Map<string, string>();
+
+  const hydratedTemplates = layout.customTemplates.map((template) => {
+    const existingPiece = mergedCustomPieces.find((piece) => piece.id === template.id);
+
+    if (!existingPiece) {
+      const importedPiece: CustomPieceDefinition = {
+        ...template,
+        isCustom: true,
+      };
+      mergedCustomPieces.push(importedPiece);
+      usedIds.add(importedPiece.id);
+      return importedPiece;
+    }
+
+    if (areTemplateContentsEqual(existingPiece, template)) {
+      return existingPiece;
+    }
+
+    const existingImportedPiece = mergedCustomPieces.find(
+      (piece) => piece.id.startsWith(`url-${template.id}`) && areTemplateContentsEqual(piece, template),
+    );
+
+    if (existingImportedPiece) {
+      templateIdRemap.set(template.id, existingImportedPiece.id);
+      return existingImportedPiece;
+    }
+
+    const importedId = buildImportedTemplateId(template.id, usedIds);
+    const importedPiece: CustomPieceDefinition = {
+      ...template,
+      id: importedId,
+      name: `${template.name} (from URL)`,
+      isCustom: true,
+    };
+
+    mergedCustomPieces.push(importedPiece);
+    usedIds.add(importedId);
+    templateIdRemap.set(template.id, importedId);
+    return importedPiece;
+  });
+
+  const nextLayout: LayoutState = {
+    ...layout,
+    pieces:
+      templateIdRemap.size > 0
+        ? layout.pieces.map((piece) => {
+            const remappedTemplateId = templateIdRemap.get(piece.templateId);
+
+            if (!remappedTemplateId) {
+              return piece;
+            }
+
+            return {
+              ...piece,
+              templateId: remappedTemplateId,
+            };
+          })
+        : layout.pieces,
+    customTemplates: hydratedTemplates.map(toTemplate),
+  };
+
+  return {
+    layout: nextLayout,
+    customPieces: mergedCustomPieces,
+    didChange: mergedCustomPieces.length !== existingCustomPieces.length || templateIdRemap.size > 0,
+  };
+};
+
+const buildLayoutWithCustomTemplates = (layout: LayoutState, customPieces: CustomPieceDefinition[]): LayoutState => {
+  const customTemplatesInUse = customPieces.filter((customPiece) =>
+    layout.pieces.some((piece) => piece.templateId === customPiece.id),
+  );
+
+  if (customTemplatesInUse.length === 0) {
+    const { customTemplates: _unusedCustomTemplates, ...layoutWithoutCustomTemplates } = layout;
+    return layoutWithoutCustomTemplates;
+  }
+
+  return {
+    ...layout,
+    customTemplates: customTemplatesInUse.map(toTemplate),
+  };
+};
+
+const createInitialStudioState = (): InitialStudioState => {
+  const initialLayout = getInitialLayout();
+  const storedCustomPieces = loadCustomPieces();
+  const hydratedState = hydrateCustomTemplatesFromLayout(initialLayout, storedCustomPieces);
+
+  return {
+    layout: hydratedState.layout,
+    customPieces: hydratedState.customPieces,
+    presetOverrides: loadPresetOverrides(),
+    shouldPersistHydratedCustomPieces: hydratedState.didChange,
+  };
+};
+
 export function LayoutStudio() {
-  const [layout, setLayout] = useState<LayoutState>(() => getInitialLayout());
+  const [initialStudioState] = useState(createInitialStudioState);
+  const [layout, setLayout] = useState<LayoutState>(initialStudioState.layout);
   const [savedLayouts, setSavedLayouts] = useState<SavedLayoutRecord[]>(() => loadSavedLayouts());
+  const [customPieces, setCustomPieces] = useState<CustomPieceDefinition[]>(initialStudioState.customPieces);
+  const [presetOverrides, setPresetOverrides] = useState<Map<string, TerrainTemplate>>(
+    () => new Map(initialStudioState.presetOverrides),
+  );
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
   const [activeSavedLayoutId, setActiveSavedLayoutId] = useState<string | null>(null);
   const [layoutNameInput, setLayoutNameInput] = useState('');
@@ -114,14 +322,30 @@ export function LayoutStudio() {
   );
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [libraryDragActive, setLibraryDragActive] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const cleanSvgRef = useRef<SVGSVGElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
   const layoutRef = useRef(layout);
+  const customPiecesRef = useRef(customPieces);
 
   useEffect(() => {
     layoutRef.current = layout;
   }, [layout]);
+
+  useEffect(() => {
+    customPiecesRef.current = customPieces;
+  }, [customPieces]);
+
+  useEffect(() => {
+    if (!initialStudioState.shouldPersistHydratedCustomPieces) {
+      return;
+    }
+
+    if (!persistCustomPieces(initialStudioState.customPieces)) {
+      setStorageWarning(STORAGE_WARNING_MESSAGE);
+    }
+  }, [initialStudioState]);
 
   useEffect(() => {
     setSelectedPieceId((current) => {
@@ -134,9 +358,11 @@ export function LayoutStudio() {
   }, [layout.pieces]);
 
   useEffect(() => {
-    setStorageWarning(persistWorkingLayout(layout) ? null : STORAGE_WARNING_MESSAGE);
-    updateHash(layout);
-  }, [layout]);
+    const layoutWithCustomTemplates = buildLayoutWithCustomTemplates(layout, customPieces);
+
+    setStorageWarning(persistWorkingLayout(layoutWithCustomTemplates) ? null : STORAGE_WARNING_MESSAGE);
+    updateHash(layoutWithCustomTemplates);
+  }, [layout, customPieces]);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -146,16 +372,37 @@ export function LayoutStudio() {
         return;
       }
 
-      setLayout(fromHash);
+      const hydratedState = hydrateCustomTemplatesFromLayout(fromHash, customPiecesRef.current);
+
+      setLayout(hydratedState.layout);
+      setCustomPieces(hydratedState.customPieces);
       setActiveSavedLayoutId(null);
       setLayoutNameInput('');
       setStatusMessage('Loaded a shared layout from the URL.');
+
+      if (hydratedState.didChange && !persistCustomPieces(hydratedState.customPieces)) {
+        setStorageWarning(STORAGE_WARNING_MESSAGE);
+      }
     };
 
     window.addEventListener('hashchange', handleHashChange);
 
     return () => {
       window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const clearLibraryDrag = () => {
+      setLibraryDragActive(false);
+    };
+
+    window.addEventListener('dragend', clearLibraryDrag);
+    window.addEventListener('drop', clearLibraryDrag);
+
+    return () => {
+      window.removeEventListener('dragend', clearLibraryDrag);
+      window.removeEventListener('drop', clearLibraryDrag);
     };
   }, []);
 
@@ -224,7 +471,49 @@ export function LayoutStudio() {
     [layout.pieces, selectedPieceId],
   );
 
-  const shareUrl = useMemo(() => createShareUrl(layout), [layout]);
+  const resolvedPresets = useMemo(
+    () =>
+      terrainCatalog.map((preset) => {
+        const override = presetOverrides.get(preset.id);
+        return override ? { ...preset, ...override } : preset;
+      }),
+    [presetOverrides],
+  );
+
+  const getTemplateById = (templateId: string) =>
+    customPieces.find((piece) => piece.id === templateId) ?? resolvedPresets.find((piece) => piece.id === templateId);
+
+  const getDropPosition = (clientX: number, clientY: number) => {
+    const svgElement = svgRef.current;
+
+    if (!svgElement) {
+      return null;
+    }
+
+    const rect = svgElement.getBoundingClientRect();
+
+    if (!rect.width || !rect.height) {
+      return null;
+    }
+
+    const { sceneWidth, sceneHeight } = getSceneSize(
+      layoutRef.current.table.widthInches,
+      layoutRef.current.table.heightInches,
+    );
+    const sceneX = ((clientX - rect.left) / rect.width) * sceneWidth;
+    const sceneY = ((clientY - rect.top) / rect.height) * sceneHeight;
+
+    return {
+      x: sceneX - TABLE_SCENE_MARGIN.left,
+      y: layoutRef.current.table.heightInches - (sceneY - TABLE_SCENE_MARGIN.top),
+    };
+  };
+
+  const shareUrl = useMemo(
+    () => createShareUrl(buildLayoutWithCustomTemplates(layout, customPieces)),
+    [layout, customPieces],
+  );
+
   const shareUrlPreview = useMemo(() => {
     try {
       const url = new URL(shareUrl);
@@ -255,8 +544,8 @@ export function LayoutStudio() {
     }));
   };
 
-  const handleAddPiece = (templateId: string) => {
-    const template = getTerrainTemplate(templateId);
+  const handleAddPiece = (templateId: string, position?: { x: number; y: number }) => {
+    const template = getTemplateById(templateId);
 
     if (!template) {
       return;
@@ -265,8 +554,8 @@ export function LayoutStudio() {
     let nextPieceId: string | null = null;
 
     setLayout((current) => {
-      const position = getSuggestedPosition(current.pieces.length, current);
-      const newPiece = clampPieceToTable(createTerrainPiece(template, position), current);
+      const nextPosition = position ?? getSuggestedPosition(current.pieces.length, current);
+      const newPiece = clampPieceToTable(createTerrainPiece(template, nextPosition), current);
       nextPieceId = newPiece.id;
       return {
         ...current,
@@ -279,6 +568,38 @@ export function LayoutStudio() {
     }
 
     setStatusMessage(`Added ${template.name.toLowerCase()} terrain.`);
+  };
+
+  const handleCanvasDragOver = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!isTerrainLibraryDrag(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setLibraryDragActive(true);
+  };
+
+  const handleCanvasDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (isTerrainLibraryDrag(event.dataTransfer)) {
+      event.preventDefault();
+    }
+
+    setLibraryDragActive(false);
+
+    const payload = parseLibraryDropPayload(event.dataTransfer);
+
+    if (!payload) {
+      return;
+    }
+
+    const dropPosition = getDropPosition(event.clientX, event.clientY);
+
+    if (!dropPosition) {
+      return;
+    }
+
+    handleAddPiece(payload.templateId, dropPosition);
   };
 
   const handleDuplicateSelectedPiece = () => {
@@ -337,6 +658,69 @@ export function LayoutStudio() {
       pieces: current.pieces.filter((piece) => piece.id !== selectedPiece.id),
     }));
     setStatusMessage(`Removed ${selectedPiece.name.toLowerCase()} from the layout.`);
+  };
+
+  const handleAddCustomPiece = (data: PieceFormData) => {
+    const newCustomPiece = addCustomPiece(data);
+    setCustomPieces((prev) => [...prev, newCustomPiece]);
+    setStatusMessage(`Created custom terrain piece: ${data.name}`);
+  };
+
+  const handleEditPiece = (id: string, data: PieceFormData) => {
+    const customPiece = customPieces.find((piece) => piece.id === id);
+
+    if (customPiece) {
+      updateCustomPiece(id, data);
+      setCustomPieces((prev) => prev.map((piece) => (piece.id === id ? { ...piece, ...data, isCustom: true } : piece)));
+      setStatusMessage(`Updated custom piece: ${data.name}`);
+      return;
+    }
+
+    const presetTemplate = resolvedPresets.find((piece) => piece.id === id) ?? getTerrainTemplate(id);
+
+    if (!presetTemplate) {
+      return;
+    }
+
+    const nextPresetOverrides = new Map(presetOverrides);
+    nextPresetOverrides.set(id, {
+      ...presetTemplate,
+      ...data,
+      id,
+      defaultRotation: data.defaultRotation ?? presetTemplate.defaultRotation,
+      traits: data.traits,
+    });
+
+    const persisted = persistPresetOverrides(nextPresetOverrides.values());
+    setPresetOverrides(nextPresetOverrides);
+
+    if (!persisted) {
+      setStorageWarning(STORAGE_WARNING_MESSAGE);
+    }
+
+    setStatusMessage(
+      persisted
+        ? `Updated preset: ${data.name}`
+        : `Updated preset: ${data.name} for this tab, but browser storage is unavailable so it will not persist after refresh.`,
+    );
+  };
+
+  const handleDeleteCustomPiece = (id: string) => {
+    if (deleteCustomPiece(id)) {
+      setCustomPieces((prev) => prev.filter((p) => p.id !== id));
+      setStatusMessage('Deleted custom terrain piece.');
+    }
+  };
+
+  const handleDuplicatePiece = (id: string): TerrainTemplate | null => {
+    const sourcePiece =
+      customPieces.find((piece) => piece.id === id) ?? resolvedPresets.find((piece) => piece.id === id);
+
+    if (!sourcePiece) {
+      return null;
+    }
+
+    return createDuplicateDraft(sourcePiece);
   };
 
   const handleResetLayout = () => {
@@ -790,51 +1174,15 @@ export function LayoutStudio() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
-            <h2 className="text-lg font-semibold text-white">Terrain palette</h2>
-            <p className="mt-1 text-sm text-slate-300">
-              Drop in additional pieces, then drag or tune them from the inspector.
-            </p>
-
-            <div className="mt-5 space-y-3">
-              {terrainCatalog.map((template) => (
-                <article key={template.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-semibold text-white">{template.name}</h3>
-                      <p className="mt-1 text-xs text-slate-400">
-                        {formatInches(template.width)} × {formatInches(template.height)}
-                      </p>
-                    </div>
-                    <span
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border"
-                      style={{ backgroundColor: template.fill, borderColor: template.stroke }}
-                      aria-hidden="true"
-                    />
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {template.traits.map((trait) => (
-                      <span
-                        key={`${template.id}-${trait.id}`}
-                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${categoryChipClasses[trait.category]}`}
-                      >
-                        {categoryLabels[trait.category]} · {trait.label}
-                      </span>
-                    ))}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleAddPiece(template.id)}
-                    className="mt-4 rounded-full border border-cyan-400/30 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300 hover:text-white"
-                  >
-                    Add to table
-                  </button>
-                </article>
-              ))}
-            </div>
-          </section>
+          <TerrainPaletteTable
+            presets={resolvedPresets}
+            customPieces={customPieces}
+            onAddCustom={handleAddCustomPiece}
+            onEditPiece={handleEditPiece}
+            onDeleteCustom={handleDeleteCustomPiece}
+            onDuplicatePiece={handleDuplicatePiece}
+            onAddPieceToLayout={handleAddPiece}
+          />
         </aside>
 
         <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-4 shadow-xl shadow-slate-950/20 sm:p-6">
@@ -862,6 +1210,9 @@ export function LayoutStudio() {
               pieces={layout.pieces}
               selectedPieceId={selectedPieceId}
               svgRef={svgRef}
+              libraryDragActive={libraryDragActive}
+              onCanvasDragOver={handleCanvasDragOver}
+              onCanvasDrop={handleCanvasDrop}
               onPiecePointerDown={handlePiecePointerDown}
               onPieceSelect={setSelectedPieceId}
             />
