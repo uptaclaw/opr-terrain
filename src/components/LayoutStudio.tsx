@@ -118,6 +118,7 @@ export function LayoutStudio() {
   const [layout, setLayout] = useState<LayoutState>(() => getInitialLayout());
   const [savedLayouts, setSavedLayouts] = useState<SavedLayoutRecord[]>(() => loadSavedLayouts());
   const [customPieces, setCustomPieces] = useState<CustomPieceDefinition[]>(() => loadCustomPieces());
+  const [presetOverrides, setPresetOverrides] = useState<Map<string, Partial<TerrainTemplate>>>(new Map());
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
   const [activeSavedLayoutId, setActiveSavedLayoutId] = useState<string | null>(null);
   const [layoutNameInput, setLayoutNameInput] = useState('');
@@ -173,12 +174,23 @@ export function LayoutStudio() {
       setLayoutNameInput('');
       setStatusMessage('Loaded a shared layout from the URL.');
       
-      // Load custom templates from the shared layout
+      // Load custom templates from the shared layout with namespacing to avoid collisions
       if (fromHash.customTemplates && fromHash.customTemplates.length > 0) {
         setCustomPieces((prev) => {
           const merged = [...prev];
           fromHash.customTemplates!.forEach((template) => {
-            if (!merged.find((p) => p.id === template.id)) {
+            // Check for ID collision
+            const existing = merged.find((p) => p.id === template.id);
+            if (existing) {
+              // ID collision - create with url-prefixed ID to ensure shared layout renders correctly
+              const namespacedTemplate = {
+                ...template,
+                id: `url-${template.id}`,
+                name: `${template.name} (from URL)`,
+                isCustom: true as const,
+              };
+              merged.push(namespacedTemplate);
+            } else {
               merged.push({ ...template, isCustom: true } as CustomPieceDefinition);
             }
           });
@@ -303,10 +315,15 @@ export function LayoutStudio() {
   };
 
   const handleAddPiece = (templateId: string) => {
-    // First check custom pieces, then fall back to catalog
+    // First check custom pieces, then fall back to catalog (with overrides applied)
     let template: TerrainTemplate | undefined = customPieces.find((p) => p.id === templateId);
     if (!template) {
       template = getTerrainTemplate(templateId);
+      // Apply preset override if exists
+      const override = presetOverrides.get(templateId);
+      if (template && override) {
+        template = { ...template, ...override };
+      }
     }
 
     if (!template) {
@@ -406,10 +423,13 @@ export function LayoutStudio() {
       );
       setStatusMessage(`Updated custom piece: ${data.name}`);
     } else {
-      // It's a preset - create a custom override
-      const newCustomPiece = addCustomPiece({ ...data });
-      setCustomPieces((prev) => [...prev, newCustomPiece]);
-      setStatusMessage(`Created custom variant: ${data.name}`);
+      // It's a preset - add session-only override
+      setPresetOverrides((prev) => {
+        const updated = new Map(prev);
+        updated.set(id, data);
+        return updated;
+      });
+      setStatusMessage(`Updated preset: ${data.name} (session only)`);
     }
   };
 
@@ -902,7 +922,10 @@ export function LayoutStudio() {
           </section>
 
           <TerrainPaletteTable
-            presets={terrainCatalog}
+            presets={terrainCatalog.map(preset => {
+              const override = presetOverrides.get(preset.id);
+              return override ? { ...preset, ...override } : preset;
+            })}
             customPieces={customPieces}
             onAddCustom={handleAddCustomPiece}
             onEditPiece={handleEditPiece}

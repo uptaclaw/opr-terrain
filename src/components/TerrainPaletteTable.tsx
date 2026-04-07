@@ -13,7 +13,6 @@ interface TerrainPaletteTableProps {
   onDeleteCustom: (id: string) => void;
   onDuplicatePiece: (id: string) => void;
   onAddPieceToLayout?: (templateId: string) => void;
-  onDragStateChange?: (isDragging: boolean) => void;
 }
 
 type CombinedPiece = TerrainTemplate & {
@@ -54,7 +53,6 @@ export function TerrainPaletteTable({
   onDeleteCustom,
   onDuplicatePiece,
   onAddPieceToLayout,
-  onDragStateChange,
 }: TerrainPaletteTableProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPiece, setEditingPiece] = useState<TerrainTemplate | null>(null);
@@ -81,11 +79,10 @@ export function TerrainPaletteTable({
     event.dataTransfer.effectAllowed = 'copy';
     event.dataTransfer.setData(TERRAIN_LIBRARY_MIME_TYPE, buildPayload(piece));
     event.dataTransfer.setData('text/plain', piece.name);
-    onDragStateChange?.(true);
   };
 
   const handleDragEnd = () => {
-    onDragStateChange?.(false);
+    // No-op: drag state management removed
   };
 
   const handleEdit = (piece: TerrainTemplate) => {

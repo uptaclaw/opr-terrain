@@ -74,7 +74,8 @@ export const persistCustomPieces = (pieces: CustomPieceDefinition[]): boolean =>
   try {
     window.localStorage.setItem(CUSTOM_PIECES_STORAGE_KEY, JSON.stringify(pieces));
     return true;
-  } catch {
+  } catch (error) {
+    console.error('Failed to save custom terrain pieces to localStorage:', error);
     return false;
   }
 };

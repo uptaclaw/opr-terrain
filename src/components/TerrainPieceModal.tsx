@@ -50,6 +50,11 @@ export function TerrainPieceModal({ isOpen, onClose, onSave, initialData, mode }
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
 
+    // Validate hex color format
+    const hexColorRegex = /^#[0-9A-Fa-f]{6}$/;
+    const validatedFill = hexColorRegex.test(fill) ? fill : '#475569';
+    const validatedStroke = hexColorRegex.test(stroke) ? stroke : '#f8fafc';
+
     const traits: TerrainTrait[] = DEFAULT_TRAITS.map((trait) => ({
       ...trait,
       active: selectedTraits.has(trait.id),
@@ -60,8 +65,8 @@ export function TerrainPieceModal({ isOpen, onClose, onSave, initialData, mode }
       shape,
       width: Math.max(2, Math.min(24, width)),
       height: Math.max(2, Math.min(24, height)),
-      fill,
-      stroke,
+      fill: validatedFill,
+      stroke: validatedStroke,
       traits,
       defaultRotation: 0,
     });
