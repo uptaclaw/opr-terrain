@@ -52,6 +52,14 @@ interface DragSession {
   };
 }
 
+interface RotationDragSession {
+  pieceId: string;
+  originalPieces: TerrainPiece[];
+  originalRotation: number;
+  centerX: number;
+  centerY: number;
+}
+
 interface TerrainLibraryDropPayload {
   templateId: string;
   shapeKind?: TerrainShapeKind;
@@ -110,12 +118,14 @@ export function TerrainEditor({
   const [pieces, setPieces] = useState(initialPieces);
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
   const [draggingPieceId, setDraggingPieceId] = useState<string | null>(null);
+  const [rotatingPieceId, setRotatingPieceId] = useState<string | null>(null);
   const [libraryDragActive, setLibraryDragActive] = useState(false);
   const [snapToGridEnabled, setSnapToGridEnabled] = useState(true);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragSessionRef = useRef<DragSession | null>(null);
+  const rotationDragSessionRef = useRef<RotationDragSession | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -364,6 +374,70 @@ export function TerrainEditor({
     };
   }, [commitPieces, draggingPieceId, heightInches, snapToGridEnabled, toTableCoordinates, widthInches]);
 
+  useEffect(() => {
+    if (!rotatingPieceId) {
+      return undefined;
+    }
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const rotationSession = rotationDragSessionRef.current;
+
+      if (!rotationSession) {
+        return;
+      }
+
+      const activePiece = rotationSession.originalPieces.find((piece) => piece.id === rotationSession.pieceId);
+      const pointer = toTableCoordinates(event.clientX, event.clientY);
+
+      if (!activePiece || !pointer) {
+        return;
+      }
+
+      const dx = pointer.x - rotationSession.centerX;
+      const dy = pointer.y - rotationSession.centerY;
+      const angleRadians = Math.atan2(dy, dx);
+      const angleDegrees = (angleRadians * 180) / Math.PI + 90;
+      const normalizedAngle = ((angleDegrees % 360) + 360) % 360;
+
+      const rotatedPiece = rotateTerrainPiece(activePiece, normalizedAngle - activePiece.rotation);
+      const nextPieces = replaceTerrainPiece(rotationSession.originalPieces, rotatedPiece);
+      setPieces(nextPieces);
+    };
+
+    const finishRotation = () => {
+      const rotationSession = rotationDragSessionRef.current;
+
+      if (!rotationSession) {
+        return;
+      }
+
+      const activePiece = pieces.find((piece) => piece.id === rotationSession.pieceId);
+
+      if (!activePiece) {
+        rotationDragSessionRef.current = null;
+        setRotatingPieceId(null);
+        return;
+      }
+
+      if (activePiece.rotation === rotationSession.originalRotation) {
+        setPieces(rotationSession.originalPieces);
+      } else {
+        commitPieces(pieces, rotationSession.pieceId);
+      }
+
+      rotationDragSessionRef.current = null;
+      setRotatingPieceId(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', finishRotation);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', finishRotation);
+    };
+  }, [commitPieces, pieces, rotatingPieceId, toTableCoordinates]);
+
   const handlePieceMouseDown = useCallback(
     (pieceId: string, event: ReactMouseEvent<SVGGElement>) => {
       if (event.button !== 0) {
@@ -502,7 +576,7 @@ export function TerrainEditor({
 
   return (
     <>
-      <section className="grid gap-6 xl:grid-cols-[18rem_minmax(0,1fr)_20rem]">
+      <section className="grid gap-6 xl:grid-cols-[18rem_minmax(0,1fr)]">
         <TerrainLibrarySidebar onDragStateChange={setLibraryDragActive} />
 
         <div className="rounded-3xl border border-white/10 bg-slate-900/60 p-3 shadow-2xl shadow-cyan-950/30 sm:p-6">
@@ -520,188 +594,28 @@ export function TerrainEditor({
             onCanvasDrop={handleCanvasDrop}
             onPieceMouseDown={handlePieceMouseDown}
             onPieceContextMenu={handlePieceContextMenu}
-            onRotateHandleMouseDown={(pieceId) => handleRotatePiece(pieceId)}
+            onRotateHandleMouseDown={(pieceId, event) => {
+              const piece = pieces.find((entry) => entry.id === pieceId);
+              const pointer = toTableCoordinates(event.clientX, event.clientY);
+
+              if (!piece || !pointer) {
+                return;
+              }
+
+              setSelectedPieceId(pieceId);
+              setContextMenu(null);
+              setFeedback(null);
+              rotationDragSessionRef.current = {
+                pieceId,
+                originalPieces: pieces,
+                originalRotation: piece.rotation,
+                centerX: piece.x,
+                centerY: piece.y,
+              };
+              setRotatingPieceId(pieceId);
+            }}
           />
         </div>
-
-        <aside className="flex flex-col gap-4">
-          <AutoPlacementGenerator
-            widthInches={widthInches}
-            heightInches={heightInches}
-            deploymentDepthInches={deploymentDepthInches}
-            onLayoutGenerated={handleLayoutGenerated}
-          />
-
-          <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm uppercase tracking-[0.2em] text-cyan-300/80">Editor</p>
-                <h2 className="mt-1 text-lg font-semibold text-white">Interactive controls</h2>
-              </div>
-              <span className="rounded-full border border-white/10 bg-slate-950/70 px-3 py-1 text-xs font-semibold text-cyan-100">
-                {pieces.length} piece{pieces.length === 1 ? '' : 's'}
-              </span>
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                data-testid="undo-button"
-                disabled={!canUndo}
-                onClick={handleUndo}
-                className="inline-flex flex-1 items-center justify-center rounded-full border border-white/10 bg-slate-950/70 px-4 py-2 text-sm font-semibold text-white transition hover:border-cyan-400/50 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Undo
-              </button>
-              <button
-                type="button"
-                data-testid="redo-button"
-                disabled={!canRedo}
-                onClick={handleRedo}
-                className="inline-flex flex-1 items-center justify-center rounded-full border border-white/10 bg-slate-950/70 px-4 py-2 text-sm font-semibold text-white transition hover:border-cyan-400/50 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Redo
-              </button>
-            </div>
-
-            <label className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
-              <div>
-                <div className="text-sm font-medium text-white">Snap to grid</div>
-                <div className="text-xs text-slate-400">Locks movement and placement to 1-inch increments.</div>
-              </div>
-              <input
-                data-testid="snap-toggle"
-                type="checkbox"
-                checked={snapToGridEnabled}
-                onChange={(event) => setSnapToGridEnabled(event.target.checked)}
-                className="h-4 w-4 rounded border-slate-500 bg-slate-900 text-cyan-400 focus:ring-cyan-300"
-              />
-            </label>
-
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-200">
-              <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-2">
-                <dt className="text-xs uppercase tracking-wide text-slate-400">Collisions</dt>
-                <dd className="mt-1 font-semibold text-emerald-300">
-                  {analysis.overlaps.length === 0 ? 'Blocked cleanly' : `${analysis.overlaps.length} overlap(s)`}
-                </dd>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-2">
-                <dt className="text-xs uppercase tracking-wide text-slate-400">Selection</dt>
-                <dd className="mt-1 font-semibold text-white">
-                  {selectedPiece ? selectedPiece.name : 'None'}
-                </dd>
-              </div>
-            </dl>
-
-            {selectedPiece ? (
-              <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-950/10 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-semibold text-white">{selectedPiece.name}</h3>
-                    <p className="mt-1 text-xs text-slate-400">
-                      {selectedPiece.shape.kind} • x {selectedPiece.x.toFixed(1)} • y {selectedPiece.y.toFixed(1)}
-                    </p>
-                  </div>
-                  <div
-                    className="h-8 w-8 rounded-lg border border-white/15"
-                    style={{ backgroundColor: selectedPiece.color }}
-                    aria-hidden="true"
-                  />
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-200">
-                  {selectedPiece.traits.map((trait) => (
-                    <span
-                      key={trait}
-                      className="rounded-full border border-white/10 bg-slate-900/80 px-2.5 py-1"
-                    >
-                      {trait}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleRotatePiece(selectedPiece.id)}
-                    disabled={selectedPiece.shape.kind === 'circle'}
-                    className="inline-flex items-center justify-center rounded-full border border-white/10 bg-slate-950/70 px-4 py-2 text-sm font-semibold text-white transition hover:border-cyan-400/50 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Rotate 90°
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeletePiece(selectedPiece.id)}
-                    className="inline-flex items-center justify-center rounded-full border border-rose-400/30 bg-rose-950/30 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-300/60 hover:text-white"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-slate-400">
-                Click any piece to select it. Right-click for the quick menu, or use Delete to remove
-                the current selection.
-              </p>
-            )}
-          </section>
-
-          <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-5">
-            <h2 className="text-lg font-semibold text-white">Shortcuts & workflow</h2>
-            <ul className="mt-4 space-y-3 text-sm text-slate-300">
-              <li>
-                <span className="font-semibold text-white">Drag pieces</span> to move them without
-                letting them overlap.
-              </li>
-              <li>
-                <span className="font-semibold text-white">Drag from the library</span> to place new
-                terrain on the table.
-              </li>
-              <li>
-                <span className="font-semibold text-white">Ctrl+Z</span> undoes the last placement,
-                move, rotation, or deletion.
-              </li>
-              <li>
-                <span className="font-semibold text-white">Ctrl+Shift+Z</span> redoes the next change.
-              </li>
-            </ul>
-
-            {feedback ? (
-              <div
-                data-testid="interaction-feedback"
-                className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-950/20 px-4 py-3 text-sm text-amber-100"
-              >
-                {feedback}
-              </div>
-            ) : null}
-          </section>
-
-          <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-5">
-            <h2 className="text-lg font-semibold text-white">Layout snapshot</h2>
-            <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-              {analysis.quarterCounts.map((count, index) => (
-                <div
-                  key={quarterLabels[index]}
-                  className="rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-2"
-                >
-                  <div className="text-slate-400">{quarterLabels[index]}</div>
-                  <div className="mt-1 text-base font-semibold text-white">{count}</div>
-                </div>
-              ))}
-            </div>
-
-            <ul className="mt-4 space-y-2 text-sm text-slate-200">
-              {terrainMix.map((entry) => (
-                <li key={entry.templateId} className="flex items-center justify-between gap-3">
-                  <span>{entry.label}</span>
-                  <span className="rounded-full border border-white/10 bg-slate-950/60 px-2.5 py-1 text-xs font-semibold text-cyan-200">
-                    ×{entry.count}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        </aside>
       </section>
 
       {contextMenu && contextMenuPiece ? (

@@ -145,7 +145,7 @@ describe('TerrainEditor', () => {
     const { container } = render(
       <TerrainEditor
         widthInches={48}
-        heightInches={48}
+        heightInches={72}
         deploymentDepthInches={12}
         initialPieces={[baseWallPiece]}
       />,
@@ -167,7 +167,7 @@ describe('TerrainEditor', () => {
     const { container } = render(
       <TerrainEditor
         widthInches={48}
-        heightInches={48}
+        heightInches={72}
         deploymentDepthInches={12}
         initialPieces={[baseWallPiece]}
       />,
@@ -192,7 +192,7 @@ describe('TerrainEditor', () => {
     const { container } = render(
       <TerrainEditor
         widthInches={48}
-        heightInches={48}
+        heightInches={72}
         deploymentDepthInches={12}
         initialPieces={[baseWallPiece]}
       />,
@@ -200,10 +200,28 @@ describe('TerrainEditor', () => {
 
     selectPiece(container, 'wall-1', 10, 10);
 
-    fireEvent.mouseDown(screen.getByTestId('rotation-handle'), { button: 0 });
+    // Piece starts at rotation 0
+    expect(getPiece(container, 'wall-1')).toHaveAttribute('data-piece-rotation', '0');
 
-    expect(getPiece(container, 'wall-1')).toHaveAttribute('data-piece-rotation', '90');
+    // Get the rotation handle and drag it to create a rotation
+    const rotationHandle = screen.getByTestId('rotation-handle');
+    
+    // Start drag on rotation handle
+    fireEvent.mouseDown(rotationHandle, { button: 0, ...clientPoint(10, 5) });
+    
+    // Drag to the right to rotate the piece
+    fireEvent.mouseMove(window, clientPoint(15, 10));
+    
+    // Finish the drag
+    fireEvent.mouseUp(window, clientPoint(15, 10));
 
+    // Rotation should have changed from initial 0
+    const rotatedPiece = getPiece(container, 'wall-1');
+    const rotation = Number(rotatedPiece.getAttribute('data-piece-rotation'));
+    expect(rotation).not.toBe(0);
+    expect(rotation).toBeGreaterThan(0);
+
+    // Undo should restore to rotation 0
     fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
 
     expect(getPiece(container, 'wall-1')).toHaveAttribute('data-piece-rotation', '0');
@@ -213,7 +231,7 @@ describe('TerrainEditor', () => {
     const { container } = render(
       <TerrainEditor
         widthInches={48}
-        heightInches={48}
+        heightInches={72}
         deploymentDepthInches={12}
         initialPieces={[baseWallPiece, blockerWallPiece]}
       />,
@@ -241,7 +259,7 @@ describe('TerrainEditor', () => {
     const { container } = render(
       <TerrainEditor
         widthInches={48}
-        heightInches={48}
+        heightInches={72}
         deploymentDepthInches={12}
         initialPieces={[]}
       />,
@@ -268,7 +286,7 @@ describe('TerrainEditor', () => {
     const { container } = render(
       <TerrainEditor
         widthInches={48}
-        heightInches={48}
+        heightInches={72}
         deploymentDepthInches={12}
         initialPieces={[]}
       />,
@@ -297,7 +315,7 @@ describe('TerrainEditor', () => {
     const { container } = render(
       <TerrainEditor
         widthInches={48}
-        heightInches={48}
+        heightInches={72}
         deploymentDepthInches={12}
         initialPieces={[]}
       />,
@@ -331,7 +349,7 @@ describe('TerrainEditor', () => {
     const { container } = render(
       <TerrainEditor
         widthInches={48}
-        heightInches={48}
+        heightInches={72}
         deploymentDepthInches={12}
         initialPieces={[baseWallPiece]}
       />,
