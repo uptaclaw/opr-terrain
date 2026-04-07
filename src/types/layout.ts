@@ -38,6 +38,7 @@ export interface LayoutState {
   table: TableSettings;
   pieces: TerrainPiece[];
   placementConfig?: PlacementConfig;
+  customTemplates?: TerrainTemplate[];
 }
 
 export interface SavedLayoutRecord {

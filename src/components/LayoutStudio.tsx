@@ -16,8 +16,19 @@ import {
   persistSavedLayouts,
   persistWorkingLayout,
 } from '../lib/layout';
-import type { LayoutState, SavedLayoutRecord, TerrainPiece, TerrainTrait } from '../types/layout';
+import {
+  loadCustomPieces,
+  persistCustomPieces,
+  addCustomPiece,
+  updateCustomPiece,
+  deleteCustomPiece,
+  duplicateCustomPiece,
+  type CustomPieceDefinition,
+} from '../lib/customPieces';
+import type { LayoutState, SavedLayoutRecord, TerrainPiece, TerrainTrait, TerrainTemplate } from '../types/layout';
 import { formatInches, formatTableMeasure, getSceneSize, TableCanvas } from './TableCanvas';
+import { TerrainPaletteTable } from './TerrainPaletteTable';
+import type { PieceFormData } from './TerrainPieceModal';
 import { AutoPlacementGenerator } from './AutoPlacementGenerator';
 import { TerrainSummaryLegend } from './TerrainSummaryLegend';
 import type { TerrainLayout } from '../terrain/types';
@@ -106,6 +117,7 @@ const STORAGE_WARNING_MESSAGE =
 export function LayoutStudio() {
   const [layout, setLayout] = useState<LayoutState>(() => getInitialLayout());
   const [savedLayouts, setSavedLayouts] = useState<SavedLayoutRecord[]>(() => loadSavedLayouts());
+  const [customPieces, setCustomPieces] = useState<CustomPieceDefinition[]>(() => loadCustomPieces());
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
   const [activeSavedLayoutId, setActiveSavedLayoutId] = useState<string | null>(null);
   const [layoutNameInput, setLayoutNameInput] = useState('');
@@ -134,9 +146,19 @@ export function LayoutStudio() {
   }, [layout.pieces]);
 
   useEffect(() => {
-    setStorageWarning(persistWorkingLayout(layout) ? null : STORAGE_WARNING_MESSAGE);
-    updateHash(layout);
-  }, [layout]);
+    // Include custom templates for pieces that reference them
+    const customTemplatesInUse = customPieces.filter((custom) =>
+      layout.pieces.some((piece) => piece.templateId === custom.id)
+    );
+    
+    const layoutWithCustoms: LayoutState = {
+      ...layout,
+      ...(customTemplatesInUse.length > 0 ? { customTemplates: customTemplatesInUse } : {}),
+    };
+    
+    setStorageWarning(persistWorkingLayout(layoutWithCustoms) ? null : STORAGE_WARNING_MESSAGE);
+    updateHash(layoutWithCustoms);
+  }, [layout, customPieces]);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -150,6 +172,20 @@ export function LayoutStudio() {
       setActiveSavedLayoutId(null);
       setLayoutNameInput('');
       setStatusMessage('Loaded a shared layout from the URL.');
+      
+      // Load custom templates from the shared layout
+      if (fromHash.customTemplates && fromHash.customTemplates.length > 0) {
+        setCustomPieces((prev) => {
+          const merged = [...prev];
+          fromHash.customTemplates!.forEach((template) => {
+            if (!merged.find((p) => p.id === template.id)) {
+              merged.push({ ...template, isCustom: true } as CustomPieceDefinition);
+            }
+          });
+          persistCustomPieces(merged.filter((p) => p.isCustom) as CustomPieceDefinition[]);
+          return merged;
+        });
+      }
     };
 
     window.addEventListener('hashchange', handleHashChange);
@@ -224,7 +260,18 @@ export function LayoutStudio() {
     [layout.pieces, selectedPieceId],
   );
 
-  const shareUrl = useMemo(() => createShareUrl(layout), [layout]);
+  const shareUrl = useMemo(() => {
+    const customTemplatesInUse = customPieces.filter((custom) =>
+      layout.pieces.some((piece) => piece.templateId === custom.id)
+    );
+    
+    const layoutWithCustoms: LayoutState = {
+      ...layout,
+      ...(customTemplatesInUse.length > 0 ? { customTemplates: customTemplatesInUse } : {}),
+    };
+    
+    return createShareUrl(layoutWithCustoms);
+  }, [layout, customPieces]);
   const shareUrlPreview = useMemo(() => {
     try {
       const url = new URL(shareUrl);
@@ -256,7 +303,11 @@ export function LayoutStudio() {
   };
 
   const handleAddPiece = (templateId: string) => {
-    const template = getTerrainTemplate(templateId);
+    // First check custom pieces, then fall back to catalog
+    let template: TerrainTemplate | undefined = customPieces.find((p) => p.id === templateId);
+    if (!template) {
+      template = getTerrainTemplate(templateId);
+    }
 
     if (!template) {
       return;
@@ -266,7 +317,7 @@ export function LayoutStudio() {
 
     setLayout((current) => {
       const position = getSuggestedPosition(current.pieces.length, current);
-      const newPiece = clampPieceToTable(createTerrainPiece(template, position), current);
+      const newPiece = clampPieceToTable(createTerrainPiece(template!, position), current);
       nextPieceId = newPiece.id;
       return {
         ...current,
@@ -337,6 +388,66 @@ export function LayoutStudio() {
       pieces: current.pieces.filter((piece) => piece.id !== selectedPiece.id),
     }));
     setStatusMessage(`Removed ${selectedPiece.name.toLowerCase()} from the layout.`);
+  };
+
+  const handleAddCustomPiece = (data: PieceFormData) => {
+    const newCustomPiece = addCustomPiece(data);
+    setCustomPieces((prev) => [...prev, newCustomPiece]);
+    setStatusMessage(`Created custom terrain piece: ${data.name}`);
+  };
+
+  const handleEditPiece = (id: string, data: PieceFormData) => {
+    // Check if it's a custom piece
+    const customPiece = customPieces.find((p) => p.id === id);
+    if (customPiece) {
+      updateCustomPiece(id, data);
+      setCustomPieces((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, ...data } : p))
+      );
+      setStatusMessage(`Updated custom piece: ${data.name}`);
+    } else {
+      // It's a preset - create a custom override
+      const newCustomPiece = addCustomPiece({ ...data });
+      setCustomPieces((prev) => [...prev, newCustomPiece]);
+      setStatusMessage(`Created custom variant: ${data.name}`);
+    }
+  };
+
+  const handleDeleteCustomPiece = (id: string) => {
+    if (deleteCustomPiece(id)) {
+      setCustomPieces((prev) => prev.filter((p) => p.id !== id));
+      setStatusMessage('Deleted custom terrain piece.');
+    }
+  };
+
+  const handleDuplicatePiece = (id: string) => {
+    // First check if it's a custom piece
+    let sourcePiece = customPieces.find((p) => p.id === id);
+    if (sourcePiece) {
+      const duplicate = duplicateCustomPiece(id);
+      if (duplicate) {
+        setCustomPieces((prev) => [...prev, duplicate]);
+        setStatusMessage(`Duplicated ${sourcePiece!.name}`);
+      }
+      return;
+    }
+
+    // It's a preset - create a custom copy
+    const presetPiece = terrainCatalog.find((p) => p.id === id);
+    if (presetPiece) {
+      const newCustomPiece = addCustomPiece({
+        name: `${presetPiece.name} (Copy)`,
+        shape: presetPiece.shape,
+        fill: presetPiece.fill,
+        stroke: presetPiece.stroke,
+        width: presetPiece.width,
+        height: presetPiece.height,
+        defaultRotation: presetPiece.defaultRotation,
+        traits: presetPiece.traits,
+      });
+      setCustomPieces((prev) => [...prev, newCustomPiece]);
+      setStatusMessage(`Created custom copy: ${newCustomPiece.name}`);
+    }
   };
 
   const handleResetLayout = () => {
@@ -790,51 +901,15 @@ export function LayoutStudio() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
-            <h2 className="text-lg font-semibold text-white">Terrain palette</h2>
-            <p className="mt-1 text-sm text-slate-300">
-              Drop in additional pieces, then drag or tune them from the inspector.
-            </p>
-
-            <div className="mt-5 space-y-3">
-              {terrainCatalog.map((template) => (
-                <article key={template.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-semibold text-white">{template.name}</h3>
-                      <p className="mt-1 text-xs text-slate-400">
-                        {formatInches(template.width)} × {formatInches(template.height)}
-                      </p>
-                    </div>
-                    <span
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border"
-                      style={{ backgroundColor: template.fill, borderColor: template.stroke }}
-                      aria-hidden="true"
-                    />
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {template.traits.map((trait) => (
-                      <span
-                        key={`${template.id}-${trait.id}`}
-                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${categoryChipClasses[trait.category]}`}
-                      >
-                        {categoryLabels[trait.category]} · {trait.label}
-                      </span>
-                    ))}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleAddPiece(template.id)}
-                    className="mt-4 rounded-full border border-cyan-400/30 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300 hover:text-white"
-                  >
-                    Add to table
-                  </button>
-                </article>
-              ))}
-            </div>
-          </section>
+          <TerrainPaletteTable
+            presets={terrainCatalog}
+            customPieces={customPieces}
+            onAddCustom={handleAddCustomPiece}
+            onEditPiece={handleEditPiece}
+            onDeleteCustom={handleDeleteCustomPiece}
+            onDuplicatePiece={handleDuplicatePiece}
+            onAddPieceToLayout={handleAddPiece}
+          />
         </aside>
 
         <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-4 shadow-xl shadow-slate-950/20 sm:p-6">
