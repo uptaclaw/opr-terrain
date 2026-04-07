@@ -188,11 +188,11 @@ describe('TerrainEditor', () => {
     expect(screen.queryAllByTestId('terrain-piece')).toHaveLength(0);
   });
 
-  it('rotates the selected piece from the rotation handle and can undo the change', () => {
+  it('rotates the selected piece freely using the rotation handle', () => {
     const { container } = render(
       <TerrainEditor
         widthInches={48}
-        heightInches={48}
+        heightInches={72}
         deploymentDepthInches={12}
         initialPieces={[baseWallPiece]}
       />,
@@ -200,12 +200,31 @@ describe('TerrainEditor', () => {
 
     selectPiece(container, 'wall-1', 10, 10);
 
-    fireEvent.mouseDown(screen.getByTestId('rotation-handle'), { button: 0 });
+    const rotationHandle = screen.getByTestId('rotation-handle');
+    const pieceElement = getPiece(container, 'wall-1');
 
-    expect(getPiece(container, 'wall-1')).toHaveAttribute('data-piece-rotation', '90');
+    // Initial rotation should be 0
+    expect(pieceElement).toHaveAttribute('data-piece-rotation', '0');
 
+    // Start rotation drag
+    fireEvent.mouseDown(rotationHandle, { button: 0, ...clientPoint(10, 5) });
+
+    // Drag to a different position (simulating rotation)
+    fireEvent.mouseMove(window, clientPoint(15, 10));
+
+    // Rotation should have changed from initial value
+    const currentRotation = Number(pieceElement?.getAttribute('data-piece-rotation'));
+    expect(currentRotation).not.toBe(0);
+    expect(Math.abs(currentRotation)).toBeGreaterThan(0);
+
+    // Finish rotation
+    fireEvent.mouseUp(window, clientPoint(15, 10));
+
+    // Rotation should persist
+    expect(Number(pieceElement?.getAttribute('data-piece-rotation'))).not.toBe(0);
+
+    // Undo should restore original rotation
     fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
-
     expect(getPiece(container, 'wall-1')).toHaveAttribute('data-piece-rotation', '0');
   });
 
@@ -345,5 +364,98 @@ describe('TerrainEditor', () => {
     expect(hitTarget).toHaveAttribute('width', '8');
     expect(hitTarget).toHaveAttribute('height', '2');
     expect(hitTarget).not.toHaveAttribute('r');
+  });
+
+  it('renders 4\'×6\' table dimensions correctly', () => {
+    render(
+      <TerrainEditor
+        widthInches={48}
+        heightInches={72}
+        deploymentDepthInches={12}
+        initialPieces={[]}
+      />,
+    );
+
+    const canvas = screen.getByTestId('table-canvas-svg');
+    const viewBox = canvas.getAttribute('viewBox');
+
+    // ViewBox should be sceneWidth × sceneHeight
+    // sceneWidth = left(7) + width(48) + right(4) = 59
+    // sceneHeight = top(4) + height(72) + bottom(7) = 83
+    expect(viewBox).toBe('0 0 59 83');
+
+    // Verify the title shows correct dimensions
+    const titleElement = canvas.querySelector('title');
+    expect(titleElement?.textContent).toBe("4' × 6' table");
+  });
+
+  it('places deployment zones along the long (72") edges for 4\'×6\' table', () => {
+    render(
+      <TerrainEditor
+        widthInches={48}
+        heightInches={72}
+        deploymentDepthInches={12}
+        initialPieces={[]}
+      />,
+    );
+
+    // For a 4'×6' table (48 wide, 72 tall), deployment is vertical (along the short dimension)
+    // Left zone: x=7 (tableX), width=12, full height=72
+    // Right zone: x=7+48-12=43, width=12, full height=72
+    const leftZone = screen.getByTestId('deployment-zone-left');
+    const rightZone = screen.getByTestId('deployment-zone-right');
+
+    expect(leftZone).toHaveAttribute('width', '12');
+    expect(leftZone).toHaveAttribute('height', '72');
+    expect(rightZone).toHaveAttribute('width', '12');
+    expect(rightZone).toHaveAttribute('height', '72');
+  });
+
+  it('constrains piece placement to 4\'×6\' bounds', () => {
+    const { container } = render(
+      <TerrainEditor
+        widthInches={48}
+        heightInches={72}
+        deploymentDepthInches={12}
+        initialPieces={[]}
+      />,
+    );
+
+    const libraryItem = screen.getByTestId('library-item-wall');
+    const dropzone = screen.getByTestId('table-canvas-dropzone');
+    const { dataTransfer, setPhase } = createDataTransfer();
+
+    fireEvent.dragStart(libraryItem, { dataTransfer });
+    setPhase('dragover');
+    dispatchDragEvent(dropzone, 'dragover', dataTransfer, clientPoint(10, 68));
+    setPhase('drop');
+    dispatchDragEvent(dropzone, 'drop', dataTransfer, clientPoint(10, 68));
+    setPhase(null);
+
+    const placedPiece = container.querySelector('[data-testid="terrain-piece"]');
+
+    // Piece should be placed within the 72" height bounds
+    const pieceY = Number(placedPiece?.getAttribute('data-piece-y'));
+    expect(pieceY).toBeGreaterThanOrEqual(0);
+    expect(pieceY).toBeLessThanOrEqual(72);
+  });
+
+  it('does not render piece inspector sidebar', () => {
+    render(
+      <TerrainEditor
+        widthInches={48}
+        heightInches={72}
+        deploymentDepthInches={12}
+        initialPieces={[baseWallPiece]}
+      />,
+    );
+
+    // The editor controls section should exist
+    expect(screen.getByTestId('editor-controls')).toBeInTheDocument();
+
+    // But the old inspector with individual piece controls should NOT exist
+    // (No "Rotate 90°" button in the inspector panel)
+    const rotateButtons = screen.queryAllByText('Rotate 90°');
+    expect(rotateButtons).toHaveLength(0);
   });
 });
