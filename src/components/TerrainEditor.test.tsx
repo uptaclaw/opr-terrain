@@ -200,9 +200,26 @@ describe('TerrainEditor', () => {
 
     selectPiece(container, 'wall-1', 10, 10);
 
-    fireEvent.mouseDown(screen.getByTestId('rotation-handle'), { button: 0 });
+    const rotationHandle = screen.getByTestId('rotation-handle');
+    
+    // Handle is above the piece center (at y = 10 - collisionRadius - 1.7)
+    // Piece center is at (10, 10)
+    // Start rotation from above the piece
+    const startY = 10 - Math.hypot(4, 1) - 1.7; // collision radius is hypot(4,1) for the wall
+    fireEvent.mouseDown(rotationHandle, { button: 0, ...clientPoint(10, startY) });
+    
+    // Drag to the right side to rotate ~90 degrees clockwise
+    // Moving from top to right is 90 degrees clockwise
+    fireEvent.mouseMove(window, clientPoint(10 + 5, 10));
+    
+    // Finish rotation
+    fireEvent.mouseUp(window);
 
-    expect(getPiece(container, 'wall-1')).toHaveAttribute('data-piece-rotation', '90');
+    // Check that rotation changed (should be ~90 degrees)
+    const piece = getPiece(container, 'wall-1');
+    const rotation = parseFloat(piece?.getAttribute('data-piece-rotation') || '0');
+    expect(rotation).toBeGreaterThan(70);
+    expect(rotation).toBeLessThan(110);
 
     fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
 

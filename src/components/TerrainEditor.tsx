@@ -15,6 +15,7 @@ import {
   createTerrainPieceFromTemplate,
   isPiecePlacementValid,
   moveTerrainPiece,
+  normalizeRotation,
   replaceTerrainPiece,
   rotateTerrainPiece,
 } from '../terrain/editor';
@@ -110,12 +111,14 @@ export function TerrainEditor({
   const [pieces, setPieces] = useState(initialPieces);
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
   const [draggingPieceId, setDraggingPieceId] = useState<string | null>(null);
+  const [rotatingPieceId, setRotatingPieceId] = useState<string | null>(null);
   const [libraryDragActive, setLibraryDragActive] = useState(false);
   const [snapToGridEnabled, setSnapToGridEnabled] = useState(true);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragSessionRef = useRef<DragSession | null>(null);
+  const rotationSessionRef = useRef<{ pieceId: string; originalPieces: TerrainPiece[]; startAngle: number; originalRotation: number } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -364,6 +367,73 @@ export function TerrainEditor({
     };
   }, [commitPieces, draggingPieceId, heightInches, snapToGridEnabled, toTableCoordinates, widthInches]);
 
+  useEffect(() => {
+    if (!rotatingPieceId) {
+      return undefined;
+    }
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const rotationSession = rotationSessionRef.current;
+
+      if (!rotationSession) {
+        return;
+      }
+
+      const activePiece = rotationSession.originalPieces.find(
+        (piece) => piece.id === rotationSession.pieceId,
+      );
+      const pointer = toTableCoordinates(event.clientX, event.clientY);
+
+      if (!activePiece || !pointer) {
+        return;
+      }
+
+      const centerX = activePiece.x;
+      const centerY = activePiece.y;
+      const deltaX = pointer.x - centerX;
+      const deltaY = pointer.y - centerY;
+      const currentAngle = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
+      const angleDelta = currentAngle - rotationSession.startAngle;
+      const newRotation = normalizeRotation(rotationSession.originalRotation + angleDelta);
+      const rotatedPiece = { ...activePiece, rotation: newRotation };
+
+      setPieces(replaceTerrainPiece(rotationSession.originalPieces, rotatedPiece));
+    };
+
+    const finishRotation = () => {
+      const rotationSession = rotationSessionRef.current;
+
+      if (!rotationSession) {
+        return;
+      }
+
+      const activePiece = pieces.find((piece) => piece.id === rotationSession.pieceId);
+
+      if (!activePiece) {
+        rotationSessionRef.current = null;
+        setRotatingPieceId(null);
+        return;
+      }
+
+      if (activePiece.rotation === rotationSession.originalRotation) {
+        setPieces(rotationSession.originalPieces);
+      } else {
+        commitPieces(pieces, rotationSession.pieceId);
+      }
+
+      rotationSessionRef.current = null;
+      setRotatingPieceId(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', finishRotation);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', finishRotation);
+    };
+  }, [commitPieces, pieces, rotatingPieceId, toTableCoordinates]);
+
   const handlePieceMouseDown = useCallback(
     (pieceId: string, event: ReactMouseEvent<SVGGElement>) => {
       if (event.button !== 0) {
@@ -412,6 +482,32 @@ export function TerrainEditor({
       setFeedback(null);
     },
     [],
+  );
+
+  const handleRotateHandleMouseDown = useCallback(
+    (pieceId: string, event: ReactMouseEvent<SVGGElement>) => {
+      const piece = pieces.find((entry) => entry.id === pieceId);
+      const pointer = toTableCoordinates(event.clientX, event.clientY);
+
+      if (!piece || !pointer) {
+        return;
+      }
+
+      const centerX = piece.x;
+      const centerY = piece.y;
+      const deltaX = pointer.x - centerX;
+      const deltaY = pointer.y - centerY;
+      const startAngle = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
+
+      rotationSessionRef.current = {
+        pieceId,
+        originalPieces: pieces,
+        startAngle,
+        originalRotation: piece.rotation,
+      };
+      setRotatingPieceId(pieceId);
+    },
+    [pieces, toTableCoordinates],
   );
 
   const handleCanvasMouseDown = useCallback(() => {
@@ -520,7 +616,7 @@ export function TerrainEditor({
             onCanvasDrop={handleCanvasDrop}
             onPieceMouseDown={handlePieceMouseDown}
             onPieceContextMenu={handlePieceContextMenu}
-            onRotateHandleMouseDown={(pieceId) => handleRotatePiece(pieceId)}
+            onRotateHandleMouseDown={handleRotateHandleMouseDown}
           />
         </div>
 
