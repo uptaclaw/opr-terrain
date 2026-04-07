@@ -5,7 +5,12 @@ import type {
   PointerEvent as ReactPointerEvent,
   Ref,
 } from 'react';
-import { getDeploymentOrientation } from '../table/tableGeometry';
+import {
+  DEFAULT_DEPLOYMENT_DEPTH_INCHES,
+  DEFAULT_TABLE_HEIGHT_INCHES,
+  DEFAULT_TABLE_WIDTH_INCHES,
+  getDeploymentOrientation,
+} from '../table/tableGeometry';
 import { TERRAIN_TRAIT_SHORT_LABELS, type TerrainPiece as EditorTerrainPiece } from '../terrain/types';
 import type { TerrainPiece as LayoutTerrainPiece } from '../types/layout';
 
@@ -266,9 +271,9 @@ const renderLayoutPieceShape = (piece: LayoutTerrainPiece) => {
 };
 
 export function TableCanvas({
-  widthInches = 48,
-  heightInches = 72,
-  deploymentDepthInches = 12,
+  widthInches = DEFAULT_TABLE_WIDTH_INCHES,
+  heightInches = DEFAULT_TABLE_HEIGHT_INCHES,
+  deploymentDepthInches = DEFAULT_DEPLOYMENT_DEPTH_INCHES,
   title,
   pieces,
   terrainPieces,

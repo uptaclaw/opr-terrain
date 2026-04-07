@@ -1,4 +1,9 @@
-import { getDeploymentOrientation } from '../table/tableGeometry';
+import {
+  DEFAULT_DEPLOYMENT_DEPTH_INCHES,
+  DEFAULT_TABLE_HEIGHT_INCHES,
+  DEFAULT_TABLE_WIDTH_INCHES,
+  getDeploymentOrientation,
+} from '../table/tableGeometry';
 import {
   getTemplateById,
   mandatoryTerrainSelections,
@@ -24,9 +29,9 @@ import {
   getQuarterIndex as getQuarterIndexUtil,
 } from './placementStrategies';
 
-const DEFAULT_WIDTH = 48;
-const DEFAULT_HEIGHT = 72;
-const DEFAULT_DEPLOYMENT_DEPTH = 12;
+const DEFAULT_WIDTH = DEFAULT_TABLE_WIDTH_INCHES;
+const DEFAULT_HEIGHT = DEFAULT_TABLE_HEIGHT_INCHES;
+const DEFAULT_DEPLOYMENT_DEPTH = DEFAULT_DEPLOYMENT_DEPTH_INCHES;
 const DEFAULT_MIN_PIECES = 15;
 const DEFAULT_MAX_PIECES = 20;
 const DEFAULT_COLLISION_BUFFER = 0.8;

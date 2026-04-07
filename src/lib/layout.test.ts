@@ -81,6 +81,50 @@ describe('layout helpers', () => {
     expect(loadSavedLayouts().map((savedLayout) => savedLayout.name)).toEqual(['Bravo', 'Alpha']);
   });
 
+  it('migrates old 48×48 layouts to 48×72 when loading from storage', () => {
+    // Simulate old layout with 48×48 dimensions
+    const oldLayout = {
+      version: 1,
+      table: {
+        widthInches: 48,
+        heightInches: 48, // Old dimension
+        deploymentDepthInches: 12,
+        title: 'Old 48x48 Layout',
+      },
+      pieces: [],
+    };
+
+    window.localStorage.setItem(WORKING_LAYOUT_STORAGE_KEY, JSON.stringify(oldLayout));
+
+    const loaded = loadWorkingLayout();
+
+    expect(loaded).not.toBeNull();
+    expect(loaded?.table.widthInches).toBe(48);
+    expect(loaded?.table.heightInches).toBe(72); // Migrated to 72
+    expect(loaded?.table.title).toBe('Old 48x48 Layout');
+  });
+
+  it('preserves non-48×48 custom table dimensions', () => {
+    const customLayout = {
+      version: 1,
+      table: {
+        widthInches: 36,
+        heightInches: 48,
+        deploymentDepthInches: 12,
+        title: 'Custom Size',
+      },
+      pieces: [],
+    };
+
+    window.localStorage.setItem(WORKING_LAYOUT_STORAGE_KEY, JSON.stringify(customLayout));
+
+    const loaded = loadWorkingLayout();
+
+    expect(loaded).not.toBeNull();
+    expect(loaded?.table.widthInches).toBe(36);
+    expect(loaded?.table.heightInches).toBe(48); // Not migrated, different from 48×48
+  });
+
   it('fails gracefully when the working draft cannot be persisted', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('Storage disabled');

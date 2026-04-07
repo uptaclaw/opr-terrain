@@ -179,6 +179,15 @@ describe('LayoutStudio', () => {
     expect(screen.getByText(/print preview/i)).toBeInTheDocument();
   });
 
+  it('removes the piece inspector sidebar and keeps selected-piece controls beneath the canvas', () => {
+    render(<LayoutStudio />);
+
+    expect(screen.queryByText(/^piece inspector$/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/^selected piece$/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /duplicate piece/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /delete piece/i })).toBeInTheDocument();
+  });
+
   it('renders the terrain summary legend and updates it when traits change', () => {
     render(<LayoutStudio />);
 

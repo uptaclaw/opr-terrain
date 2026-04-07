@@ -10,12 +10,18 @@ import type {
   TerrainShape as GeneratedTerrainShape,
   TerrainTrait as GeneratedTerrainTrait,
 } from '../terrain/types';
+import {
+  DEFAULT_DEPLOYMENT_DEPTH_INCHES,
+  DEFAULT_TABLE_HEIGHT_INCHES,
+  DEFAULT_TABLE_TITLE,
+  DEFAULT_TABLE_WIDTH_INCHES,
+} from '../table/tableGeometry';
 
 const DEFAULT_TABLE = {
-  widthInches: 48,
-  heightInches: 72,
-  deploymentDepthInches: 12,
-  title: 'OPR Terrain Layout',
+  widthInches: DEFAULT_TABLE_WIDTH_INCHES,
+  heightInches: DEFAULT_TABLE_HEIGHT_INCHES,
+  deploymentDepthInches: DEFAULT_DEPLOYMENT_DEPTH_INCHES,
+  title: DEFAULT_TABLE_TITLE,
 } as const;
 
 export const terrainCatalog: TerrainTemplate[] = [
