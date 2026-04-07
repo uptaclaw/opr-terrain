@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { TableCanvas } from './TableCanvas';
+import { getSceneSize, TableCanvas } from './TableCanvas';
 import type { TerrainPiece } from '../terrain/types';
 
 const samplePieces: TerrainPiece[] = [
@@ -59,14 +59,23 @@ const samplePieces: TerrainPiece[] = [
 ];
 
 describe('TableCanvas', () => {
-  it('renders the default 4×6 table labels and deployment zones on the long edges', () => {
+  it('renders the default 4×6 table geometry and deployment zones on the long edges', () => {
     render(<TableCanvas />);
 
+    const svg = screen.getByTestId('table-canvas-svg');
+    const leftZone = screen.getByTestId('deployment-zone-left');
+    const rightZone = screen.getByTestId('deployment-zone-right');
+    const { sceneWidth, sceneHeight } = getSceneSize(48, 72);
+
     expect(screen.getByRole('img', { name: /game table canvas/i })).toBeInTheDocument();
+    expect(screen.getAllByText("4' × 6' table").length).toBeGreaterThan(0);
     expect(screen.getByText('Width: 48"')).toBeInTheDocument();
     expect(screen.getByText('Height: 72"')).toBeInTheDocument();
-    expect(screen.getByTestId('deployment-zone-left')).toBeInTheDocument();
-    expect(screen.getByTestId('deployment-zone-right')).toBeInTheDocument();
+    expect(svg).toHaveAttribute('viewBox', `0 0 ${sceneWidth} ${sceneHeight}`);
+    expect(leftZone).toHaveAttribute('width', '12');
+    expect(leftZone).toHaveAttribute('height', '72');
+    expect(rightZone).toHaveAttribute('width', '12');
+    expect(rightZone).toHaveAttribute('height', '72');
   });
 
   it('switches deployment zones to the top and bottom when the long edge is horizontal', () => {

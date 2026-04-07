@@ -980,7 +980,7 @@ export function LayoutStudio() {
     .trim();
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto flex min-h-screen max-w-screen-2xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
       <header className="screen-only flex flex-col gap-4 rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-2xl shadow-cyan-950/20">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-2">
@@ -1068,7 +1068,7 @@ export function LayoutStudio() {
         ) : null}
       </header>
 
-      <section className="screen-only grid gap-6 xl:grid-cols-[20rem_minmax(0,1fr)_20rem]">
+      <section className="screen-only grid gap-6 xl:grid-cols-[minmax(18rem,20rem)_minmax(0,1fr)]">
         <aside className="flex flex-col gap-6">
           <AutoPlacementGenerator
             widthInches={layout.table.widthInches}
@@ -1190,7 +1190,8 @@ export function LayoutStudio() {
             <div>
               <h2 className="text-lg font-semibold text-white">Interactive table</h2>
               <p className="mt-1 text-sm text-slate-300">
-                Click a terrain piece to inspect it, then drag it directly on the board.
+                Drag terrain directly on the board. Rename pieces, toggle traits, duplicate them,
+                or remove them below the canvas instead of losing table width to a sidebar.
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-right text-sm text-slate-200">
@@ -1218,137 +1219,82 @@ export function LayoutStudio() {
             />
           </div>
 
-          <TerrainSummaryLegend pieces={layout.pieces} />
-        </section>
+          {selectedPiece ? (
+            <section className="mt-6 rounded-3xl border border-white/10 bg-slate-950/40 p-5 shadow-lg shadow-slate-950/20">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div>
+                  <p className="text-sm uppercase tracking-[0.2em] text-cyan-300/80">Selected piece</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <h3 className="text-lg font-semibold text-white">{selectedPiece.name}</h3>
+                    <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-slate-300">
+                      {selectedPiece.templateId}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-300">
+                    Drag directly on the board to reposition it. Rotation stays on the canvas via
+                    the in-place handle.
+                  </p>
+                </div>
 
-        <aside className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-white">Piece inspector</h2>
-              <p className="mt-1 text-sm text-slate-300">
-                Fine-tune names, positions, sizes, and active traits.
-              </p>
-            </div>
-            {selectedPiece ? (
-              <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-slate-300">
-                {selectedPiece.templateId}
-              </span>
-            ) : null}
-          </div>
-
-          {!selectedPiece ? (
-            <div className="mt-5 rounded-2xl border border-dashed border-white/10 px-4 py-8 text-sm text-slate-400">
-              Select a terrain piece on the table or add a new one from the palette.
-            </div>
-          ) : (
-            <div className="mt-5 space-y-5">
-              <label className="flex flex-col gap-2 text-sm text-slate-200">
-                Piece name
-                <input
-                  type="text"
-                  value={selectedPiece.name}
-                  onChange={(event) =>
-                    updatePiece(selectedPiece.id, (piece) => ({
-                      ...piece,
-                      name: event.target.value,
-                    }))
-                  }
-                  className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-base text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50"
-                />
-              </label>
-
-              <div className="grid grid-cols-2 gap-3">
-                <label className="flex flex-col gap-2 text-sm text-slate-200">
-                  X position
-                  <input
-                    type="number"
-                    min={0}
-                    max={layout.table.widthInches}
-                    step={0.5}
-                    value={selectedPiece.x}
-                    onChange={(event) =>
-                      updatePiece(selectedPiece.id, (piece) => ({
-                        ...piece,
-                        x: Number(event.target.value),
-                      }))
-                    }
-                    className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-base text-white outline-none transition focus:border-cyan-400/50"
-                  />
-                </label>
-                <label className="flex flex-col gap-2 text-sm text-slate-200">
-                  Y position
-                  <input
-                    type="number"
-                    min={0}
-                    max={layout.table.heightInches}
-                    step={0.5}
-                    value={selectedPiece.y}
-                    onChange={(event) =>
-                      updatePiece(selectedPiece.id, (piece) => ({
-                        ...piece,
-                        y: Number(event.target.value),
-                      }))
-                    }
-                    className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-base text-white outline-none transition focus:border-cyan-400/50"
-                  />
-                </label>
-                <label className="flex flex-col gap-2 text-sm text-slate-200">
-                  Width
-                  <input
-                    type="number"
-                    min={2}
-                    max={24}
-                    step={0.5}
-                    value={selectedPiece.width}
-                    onChange={(event) =>
-                      updatePiece(selectedPiece.id, (piece) => ({
-                        ...piece,
-                        width: Number(event.target.value),
-                      }))
-                    }
-                    className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-base text-white outline-none transition focus:border-cyan-400/50"
-                  />
-                </label>
-                <label className="flex flex-col gap-2 text-sm text-slate-200">
-                  Height
-                  <input
-                    type="number"
-                    min={2}
-                    max={24}
-                    step={0.5}
-                    value={selectedPiece.height}
-                    onChange={(event) =>
-                      updatePiece(selectedPiece.id, (piece) => ({
-                        ...piece,
-                        height: Number(event.target.value),
-                      }))
-                    }
-                    className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-base text-white outline-none transition focus:border-cyan-400/50"
-                  />
-                </label>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleDuplicateSelectedPiece}
+                    className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-white/25 hover:text-white"
+                  >
+                    Duplicate piece
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteSelectedPiece}
+                    className="rounded-full border border-rose-400/20 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:border-rose-300/40 hover:bg-rose-500/10"
+                  >
+                    Delete piece
+                  </button>
+                </div>
               </div>
 
-              <label className="flex flex-col gap-2 text-sm text-slate-200">
-                Rotation
-                <input
-                  type="range"
-                  min={-180}
-                  max={180}
-                  step={1}
-                  value={selectedPiece.rotation}
-                  onChange={(event) =>
-                    updatePiece(selectedPiece.id, (piece) => ({
-                      ...piece,
-                      rotation: Number(event.target.value),
-                    }))
-                  }
-                />
-                <span className="text-xs text-slate-400">{selectedPiece.rotation}°</span>
-              </label>
+              <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
+                <label className="flex flex-col gap-2 text-sm text-slate-200">
+                  Piece name
+                  <input
+                    type="text"
+                    value={selectedPiece.name}
+                    onChange={(event) =>
+                      updatePiece(selectedPiece.id, (piece) => ({
+                        ...piece,
+                        name: event.target.value,
+                      }))
+                    }
+                    className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-base text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50"
+                  />
+                </label>
 
-              <div>
+                <dl className="grid grid-cols-2 gap-3 text-sm text-slate-200 sm:grid-cols-4">
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-3">
+                    <dt className="text-xs uppercase tracking-wide text-slate-400">Position X</dt>
+                    <dd className="mt-1 font-semibold text-white">{formatInches(selectedPiece.x)}</dd>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-3">
+                    <dt className="text-xs uppercase tracking-wide text-slate-400">Position Y</dt>
+                    <dd className="mt-1 font-semibold text-white">{formatInches(selectedPiece.y)}</dd>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-3">
+                    <dt className="text-xs uppercase tracking-wide text-slate-400">Footprint</dt>
+                    <dd className="mt-1 font-semibold text-white">
+                      {formatInches(selectedPiece.width)} × {formatInches(selectedPiece.height)}
+                    </dd>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-3">
+                    <dt className="text-xs uppercase tracking-wide text-slate-400">Rotation</dt>
+                    <dd className="mt-1 font-semibold text-white">{selectedPiece.rotation}°</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="mt-5">
                 <h3 className="text-sm font-semibold text-white">Active terrain traits</h3>
-                <div className="mt-3 space-y-3">
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
                   {selectedPiece.traits.map((trait) => (
                     <label
                       key={trait.id}
@@ -1382,26 +1328,18 @@ export function LayoutStudio() {
                   ))}
                 </div>
               </div>
-
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={handleDuplicateSelectedPiece}
-                  className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-white/25 hover:text-white"
-                >
-                  Duplicate piece
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteSelectedPiece}
-                  className="rounded-full border border-rose-400/20 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:border-rose-300/40 hover:bg-rose-500/10"
-                >
-                  Delete piece
-                </button>
-              </div>
+            </section>
+          ) : (
+            <div className="mt-6 rounded-3xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-400">
+              Select a terrain piece on the table to rename it, toggle traits, duplicate it, or
+              remove it.
             </div>
           )}
-        </aside>
+
+          <div className="mt-6">
+            <TerrainSummaryLegend pieces={layout.pieces} />
+          </div>
+        </section>
       </section>
 
       <section className="print-sheet rounded-3xl border border-slate-200 bg-white p-5 text-slate-900 shadow-xl shadow-slate-950/10 sm:p-6 lg:p-8">
