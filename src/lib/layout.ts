@@ -75,9 +75,18 @@ const normalizePiece = (value: unknown): TerrainPiece | null => {
 const normalizeTable = (value: unknown): TableSettings => {
   const source = isObject(value) ? value : {};
 
+  // Migration: upgrade old 48x48 layouts to 48x72
+  let heightInches = coerceNumber(source.heightInches, DEFAULT_LAYOUT.table.heightInches, 24, 72);
+  const widthInches = coerceNumber(source.widthInches, DEFAULT_LAYOUT.table.widthInches, 24, 72);
+  
+  // If we detect the old 48x48 default, upgrade to 48x72
+  if (widthInches === 48 && heightInches === 48) {
+    heightInches = 72;
+  }
+
   return {
-    widthInches: coerceNumber(source.widthInches, DEFAULT_LAYOUT.table.widthInches, 24, 72),
-    heightInches: coerceNumber(source.heightInches, DEFAULT_LAYOUT.table.heightInches, 24, 72),
+    widthInches,
+    heightInches,
     deploymentDepthInches: coerceNumber(
       source.deploymentDepthInches,
       DEFAULT_LAYOUT.table.deploymentDepthInches,

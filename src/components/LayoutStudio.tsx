@@ -1231,8 +1231,7 @@ export function LayoutStudio() {
                     </span>
                   </div>
                   <p className="mt-2 text-sm text-slate-300">
-                    Drag directly on the board to reposition it. Rotation stays on the canvas via
-                    the in-place handle.
+                    Drag directly on the board to reposition it. Use the rotation slider below to rotate.
                   </p>
                 </div>
 
@@ -1270,7 +1269,31 @@ export function LayoutStudio() {
                   />
                 </label>
 
-                <dl className="grid grid-cols-2 gap-3 text-sm text-slate-200 sm:grid-cols-4">
+                <label className="flex flex-col gap-2 text-sm text-slate-200">
+                  Rotation (degrees)
+                  <input
+                    type="range"
+                    min="-180"
+                    max="180"
+                    step="1"
+                    value={selectedPiece.rotation}
+                    onChange={(event) =>
+                      updatePiece(selectedPiece.id, (piece) => ({
+                        ...piece,
+                        rotation: Number(event.target.value),
+                      }))
+                    }
+                    className="rounded-2xl"
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">-180°</span>
+                    <span className="font-semibold text-white">{selectedPiece.rotation}°</span>
+                    <span className="text-xs text-slate-400">180°</span>
+                  </div>
+                </label>
+              </div>
+
+              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-200 sm:grid-cols-4">
                   <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-3">
                     <dt className="text-xs uppercase tracking-wide text-slate-400">Position X</dt>
                     <dd className="mt-1 font-semibold text-white">{formatInches(selectedPiece.x)}</dd>
@@ -1285,12 +1308,7 @@ export function LayoutStudio() {
                       {formatInches(selectedPiece.width)} × {formatInches(selectedPiece.height)}
                     </dd>
                   </div>
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-3">
-                    <dt className="text-xs uppercase tracking-wide text-slate-400">Rotation</dt>
-                    <dd className="mt-1 font-semibold text-white">{selectedPiece.rotation}°</dd>
-                  </div>
                 </dl>
-              </div>
 
               <div className="mt-5">
                 <h3 className="text-sm font-semibold text-white">Active terrain traits</h3>
