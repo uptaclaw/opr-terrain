@@ -33,7 +33,7 @@ describe('customPieces', () => {
         width: 6,
         height: 4,
         defaultRotation: 0,
-        traits: ['soft-cover'],
+        traits: [{ id: 'soft-cover', label: 'Light cover', category: 'cover', active: true }],
         isCustom: true,
       };
 
@@ -110,7 +110,7 @@ describe('customPieces', () => {
         width: 8,
         height: 8,
         defaultRotation: 45,
-        traits: ['hard-cover'],
+        traits: [{ id: 'hard-cover', label: 'Heavy cover', category: 'cover', active: true }],
       });
 
       expect(piece.id).toBeTruthy();
@@ -167,7 +167,10 @@ describe('customPieces', () => {
       const result = updateCustomPiece(piece.id, {
         name: 'Updated',
         width: 8,
-        traits: ['soft-cover', 'difficult'],
+        traits: [
+          { id: 'soft-cover', label: 'Light cover', category: 'cover', active: true },
+          { id: 'difficult', label: 'Difficult ground', category: 'movement', active: true },
+        ],
       });
 
       expect(result).toBe(true);
@@ -176,7 +179,9 @@ describe('customPieces', () => {
       expect(loaded).toHaveLength(1);
       expect(loaded[0].name).toBe('Updated');
       expect(loaded[0].width).toBe(8);
-      expect(loaded[0].traits).toEqual(['soft-cover', 'difficult']);
+      expect(loaded[0].traits).toHaveLength(2);
+      expect(loaded[0].traits.map(t => t.id)).toContain('soft-cover');
+      expect(loaded[0].traits.map(t => t.id)).toContain('difficult');
       // Original values preserved
       expect(loaded[0].shape).toBe('rect');
       expect(loaded[0].height).toBe(6);
@@ -256,7 +261,10 @@ describe('customPieces', () => {
         width: 6,
         height: 4,
         defaultRotation: 45,
-        traits: ['hard-cover', 'elevated'],
+        traits: [
+          { id: 'hard-cover', label: 'Heavy cover', category: 'cover', active: true },
+          { id: 'elevated', label: 'Elevated position', category: 'movement', active: true },
+        ],
       });
 
       const duplicate = duplicateCustomPiece(original.id);
@@ -288,7 +296,11 @@ describe('customPieces', () => {
         width: 10,
         height: 8,
         defaultRotation: 90,
-        traits: ['soft-cover', 'difficult', 'dangerous'],
+        traits: [
+          { id: 'soft-cover', label: 'Light cover', category: 'cover', active: true },
+          { id: 'difficult', label: 'Difficult ground', category: 'movement', active: true },
+          { id: 'dangerous', label: 'Dangerous terrain', category: 'movement', active: true },
+        ],
       });
 
       const loaded = loadCustomPieces();
