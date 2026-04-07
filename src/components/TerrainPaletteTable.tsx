@@ -11,7 +11,7 @@ interface TerrainPaletteTableProps {
   onAddCustom: (data: PieceFormData) => void;
   onEditPiece: (id: string, data: PieceFormData) => void;
   onDeleteCustom: (id: string) => void;
-  onDuplicatePiece: (id: string) => void;
+  onDuplicatePiece: (id: string) => TerrainTemplate | null;
   onAddPieceToLayout?: (templateId: string) => void;
 }
 
@@ -45,6 +45,8 @@ const buildPayload = (piece: TerrainTemplate) =>
     shape: piece.shape,
   });
 
+type ModalMode = 'create' | 'edit' | 'duplicate';
+
 export function TerrainPaletteTable({
   presets,
   customPieces,
@@ -56,6 +58,7 @@ export function TerrainPaletteTable({
 }: TerrainPaletteTableProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPiece, setEditingPiece] = useState<TerrainTemplate | null>(null);
+  const [modalMode, setModalMode] = useState<ModalMode>('create');
   const [searchQuery, setSearchQuery] = useState('');
 
   const allPieces: CombinedPiece[] = useMemo(() => {
@@ -87,21 +90,25 @@ export function TerrainPaletteTable({
 
   const handleEdit = (piece: TerrainTemplate) => {
     setEditingPiece(piece);
+    setModalMode('edit');
     setIsModalOpen(true);
   };
 
   const handleModalSave = (data: PieceFormData) => {
-    if (editingPiece) {
+    if (modalMode === 'edit' && editingPiece) {
       onEditPiece(editingPiece.id, data);
     } else {
       onAddCustom(data);
     }
+
     setEditingPiece(null);
+    setModalMode('create');
   };
 
   const handleModalClose = () => {
     setIsModalOpen(false);
     setEditingPiece(null);
+    setModalMode('create');
   };
 
   const handleDelete = (id: string) => {
@@ -132,6 +139,7 @@ export function TerrainPaletteTable({
         <button
           onClick={() => {
             setEditingPiece(null);
+            setModalMode('create');
             setIsModalOpen(true);
           }}
           className="whitespace-nowrap rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-600"
@@ -227,7 +235,12 @@ export function TerrainPaletteTable({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onDuplicatePiece(piece.id);
+                          const duplicated = onDuplicatePiece(piece.id);
+                          if (duplicated) {
+                            setEditingPiece(duplicated);
+                            setModalMode('duplicate');
+                            setIsModalOpen(true);
+                          }
                         }}
                         className="rounded-lg border border-white/10 bg-slate-800 px-2 py-1 text-xs text-white transition hover:bg-slate-700"
                         title="Duplicate"
@@ -261,7 +274,7 @@ export function TerrainPaletteTable({
         onClose={handleModalClose}
         onSave={handleModalSave}
         initialData={editingPiece ?? undefined}
-        mode={editingPiece ? 'edit' : 'create'}
+        mode={modalMode === 'edit' ? 'edit' : 'create'}
       />
     </aside>
   );

@@ -26,7 +26,6 @@ import {
 import {
   addCustomPiece,
   deleteCustomPiece,
-  duplicateCustomPiece,
   loadCustomPieces,
   loadPresetOverrides,
   persistCustomPieces,
@@ -188,6 +187,12 @@ const buildImportedTemplateId = (originalId: string, usedIds: Set<string>) => {
 };
 
 const toTemplate = ({ isCustom: _isCustom, ...template }: CustomPieceDefinition): TerrainTemplate => template;
+
+const createDuplicateDraft = (template: TerrainTemplate): TerrainTemplate => ({
+  ...template,
+  name: `${template.name} (Copy)`,
+  traits: template.traits.map((trait) => ({ ...trait })),
+});
 
 const hydrateCustomTemplatesFromLayout = (
   layout: LayoutState,
@@ -707,33 +712,15 @@ export function LayoutStudio() {
     }
   };
 
-  const handleDuplicatePiece = (id: string) => {
-    const sourceCustomPiece = customPieces.find((piece) => piece.id === id);
+  const handleDuplicatePiece = (id: string): TerrainTemplate | null => {
+    const sourcePiece =
+      customPieces.find((piece) => piece.id === id) ?? resolvedPresets.find((piece) => piece.id === id);
 
-    if (sourceCustomPiece) {
-      const duplicate = duplicateCustomPiece(id);
-      if (duplicate) {
-        setCustomPieces((prev) => [...prev, duplicate]);
-        setStatusMessage(`Duplicated ${sourceCustomPiece.name}`);
-      }
-      return;
+    if (!sourcePiece) {
+      return null;
     }
 
-    const presetPiece = resolvedPresets.find((piece) => piece.id === id);
-    if (presetPiece) {
-      const newCustomPiece = addCustomPiece({
-        name: `${presetPiece.name} (Copy)`,
-        shape: presetPiece.shape,
-        fill: presetPiece.fill,
-        stroke: presetPiece.stroke,
-        width: presetPiece.width,
-        height: presetPiece.height,
-        defaultRotation: presetPiece.defaultRotation,
-        traits: presetPiece.traits,
-      });
-      setCustomPieces((prev) => [...prev, newCustomPiece]);
-      setStatusMessage(`Created custom copy: ${newCustomPiece.name}`);
-    }
+    return createDuplicateDraft(sourcePiece);
   };
 
   const handleResetLayout = () => {

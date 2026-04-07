@@ -3,7 +3,7 @@ import { LayoutStudio } from './LayoutStudio';
 import { TABLE_SCENE_MARGIN } from './TableCanvas';
 import { TERRAIN_LIBRARY_MIME_TYPE } from './TerrainPaletteTable';
 import { createDefaultLayout, createTerrainPiece } from '../data/terrainCatalog';
-import { PRESET_OVERRIDES_STORAGE_KEY } from '../lib/customPieces';
+import { CUSTOM_PIECES_STORAGE_KEY, PRESET_OVERRIDES_STORAGE_KEY } from '../lib/customPieces';
 import { encodeLayoutHash } from '../lib/layout';
 import type { TerrainTemplate } from '../types/layout';
 
@@ -85,6 +85,11 @@ const dispatchDragEvent = (
 
   return event;
 };
+
+const getCustomLibraryRows = () =>
+  screen
+    .getAllByTestId(/^library-item-/)
+    .filter((row) => within(row).queryByRole('button', { name: /delete/i }));
 
 describe('LayoutStudio', () => {
   beforeEach(() => {
@@ -282,5 +287,52 @@ describe('LayoutStudio', () => {
         '[data-testid="layout-terrain-piece"][data-piece-name="Barricade Deluxe"][data-piece-template-id="barricade"][data-piece-rotation="18"]',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('opens duplicate as a draft and only persists it after save', () => {
+    render(<LayoutStudio />);
+    const barricadeRow = screen.getByTestId('library-item-barricade');
+    const initialCustomPieceCount = getCustomLibraryRows().length;
+
+    fireEvent.click(within(barricadeRow).getByRole('button', { name: /duplicate/i }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByDisplayValue('Barricade (Copy)')).toBeInTheDocument();
+    expect(within(dialog).getByDisplayValue('7')).toBeInTheDocument();
+    expect(within(dialog).getByDisplayValue('2.5')).toBeInTheDocument();
+    expect(getCustomLibraryRows()).toHaveLength(initialCustomPieceCount);
+    expect(window.localStorage.getItem(CUSTOM_PIECES_STORAGE_KEY)).toBeNull();
+
+    fireEvent.change(within(dialog).getByLabelText(/^name$/i), {
+      target: { value: 'My Custom Barricade' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: /^create$/i }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(getCustomLibraryRows()).toHaveLength(initialCustomPieceCount + 1);
+
+    const duplicatedRow = getCustomLibraryRows().find((row) => within(row).queryByText('My Custom Barricade'));
+
+    expect(duplicatedRow).toBeDefined();
+    expect(within(duplicatedRow!).getByText('My Custom Barricade')).toBeInTheDocument();
+    expect(window.localStorage.getItem(CUSTOM_PIECES_STORAGE_KEY)).toContain('My Custom Barricade');
+  });
+
+  it('allows canceling a duplicate draft without creating a custom piece', () => {
+    render(<LayoutStudio />);
+    const craterRow = screen.getByTestId('library-item-crater');
+    const initialCustomPieceCount = getCustomLibraryRows().length;
+
+    fireEvent.click(within(craterRow).getByRole('button', { name: /duplicate/i }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByDisplayValue('Crater (Copy)')).toBeInTheDocument();
+    expect(getCustomLibraryRows()).toHaveLength(initialCustomPieceCount);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(getCustomLibraryRows()).toHaveLength(initialCustomPieceCount);
+    expect(window.localStorage.getItem(CUSTOM_PIECES_STORAGE_KEY)).toBeNull();
   });
 });

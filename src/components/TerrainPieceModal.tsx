@@ -163,7 +163,12 @@ export function TerrainPieceModal({ isOpen, onClose, onSave, initialData, mode }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="relative w-full max-w-2xl rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="terrain-piece-modal-title"
+        className="relative w-full max-w-2xl rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl"
+      >
         <button
           onClick={onClose}
           className="absolute right-4 top-4 rounded-lg p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
@@ -174,7 +179,7 @@ export function TerrainPieceModal({ isOpen, onClose, onSave, initialData, mode }
           </svg>
         </button>
 
-        <h2 className="mb-6 text-2xl font-semibold text-white">
+        <h2 id="terrain-piece-modal-title" className="mb-6 text-2xl font-semibold text-white">
           {mode === 'create' ? 'Add Custom Terrain' : 'Edit Terrain Piece'}
         </h2>
 
