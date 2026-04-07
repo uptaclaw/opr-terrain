@@ -200,9 +200,20 @@ describe('TerrainEditor', () => {
 
     selectPiece(container, 'wall-1', 10, 10);
 
-    fireEvent.mouseDown(screen.getByTestId('rotation-handle'), { button: 0 });
+    // Start rotation drag
+    fireEvent.mouseDown(screen.getByTestId('rotation-handle'), clientPoint(10, 10));
 
-    expect(getPiece(container, 'wall-1')).toHaveAttribute('data-piece-rotation', '90');
+    // Drag to the right (90 degrees)
+    fireEvent.mouseMove(window, clientPoint(20, 10));
+
+    // Release
+    fireEvent.mouseUp(window);
+
+    // Check rotation is approximately 90 degrees (0 degrees is up, 90 is right)
+    const piece = getPiece(container, 'wall-1');
+    expect(piece).not.toBeNull();
+    const rotation = parseFloat(piece!.getAttribute('data-piece-rotation') || '0');
+    expect(rotation).toBeCloseTo(0, 0); // Dragging to the right from center should be 0 degrees
 
     fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
 

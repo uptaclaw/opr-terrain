@@ -52,6 +52,16 @@ interface DragSession {
   };
 }
 
+interface RotationDragSession {
+  pieceId: string;
+  originalPieces: TerrainPiece[];
+  originalRotation: number;
+  pieceCenter: {
+    x: number;
+    y: number;
+  };
+}
+
 interface TerrainLibraryDropPayload {
   templateId: string;
   shapeKind?: TerrainShapeKind;
@@ -116,6 +126,7 @@ export function TerrainEditor({
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragSessionRef = useRef<DragSession | null>(null);
+  const rotationDragSessionRef = useRef<RotationDragSession | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -220,6 +231,34 @@ export function TerrainEditor({
     [commitPieces, pieces],
   );
 
+  const handleRotateHandleMouseDown = useCallback(
+    (pieceId: string, event: ReactMouseEvent<SVGGElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
+
+      const piece = pieces.find((entry) => entry.id === pieceId);
+
+      if (!piece || piece.shape.kind === 'circle') {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      rotationDragSessionRef.current = {
+        pieceId,
+        originalPieces: pieces,
+        originalRotation: piece.rotation,
+        pieceCenter: {
+          x: piece.x,
+          y: piece.y,
+        },
+      };
+    },
+    [pieces],
+  );
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isTextEntryTarget(event.target)) {
@@ -282,12 +321,42 @@ export function TerrainEditor({
   }, [contextMenu]);
 
   useEffect(() => {
-    if (!draggingPieceId) {
+    if (!draggingPieceId && !rotationDragSessionRef.current) {
       return undefined;
     }
 
     const handleMouseMove = (event: MouseEvent) => {
       const dragSession = dragSessionRef.current;
+      const rotationSession = rotationDragSessionRef.current;
+
+      if (rotationSession) {
+        const pointer = toTableCoordinates(event.clientX, event.clientY);
+
+        if (!pointer) {
+          return;
+        }
+
+        const deltaX = pointer.x - rotationSession.pieceCenter.x;
+        const deltaY = pointer.y - rotationSession.pieceCenter.y;
+        const angleDegrees = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
+        const normalizedAngle = ((angleDegrees % 360) + 360) % 360;
+
+        const activePiece = rotationSession.originalPieces.find(
+          (piece) => piece.id === rotationSession.pieceId,
+        );
+
+        if (!activePiece) {
+          return;
+        }
+
+        const rotatedPiece = {
+          ...activePiece,
+          rotation: normalizedAngle,
+        };
+
+        setPieces(replaceTerrainPiece(rotationSession.originalPieces, rotatedPiece));
+        return;
+      }
 
       if (!dragSession) {
         return;
@@ -325,6 +394,19 @@ export function TerrainEditor({
     };
 
     const finishDrag = () => {
+      const rotationSession = rotationDragSessionRef.current;
+
+      if (rotationSession) {
+        const activePiece = pieces.find((piece) => piece.id === rotationSession.pieceId);
+
+        if (activePiece) {
+          commitPieces(pieces, rotationSession.pieceId);
+        }
+
+        rotationDragSessionRef.current = null;
+        return;
+      }
+
       const dragSession = dragSessionRef.current;
 
       if (!dragSession) {
@@ -362,7 +444,7 @@ export function TerrainEditor({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', finishDrag);
     };
-  }, [commitPieces, draggingPieceId, heightInches, snapToGridEnabled, toTableCoordinates, widthInches]);
+  }, [commitPieces, draggingPieceId, heightInches, pieces, snapToGridEnabled, toTableCoordinates, widthInches]);
 
   const handlePieceMouseDown = useCallback(
     (pieceId: string, event: ReactMouseEvent<SVGGElement>) => {
@@ -520,7 +602,7 @@ export function TerrainEditor({
             onCanvasDrop={handleCanvasDrop}
             onPieceMouseDown={handlePieceMouseDown}
             onPieceContextMenu={handlePieceContextMenu}
-            onRotateHandleMouseDown={(pieceId) => handleRotatePiece(pieceId)}
+            onRotateHandleMouseDown={handleRotateHandleMouseDown}
           />
         </div>
 
