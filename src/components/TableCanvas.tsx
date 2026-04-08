@@ -562,6 +562,10 @@ export function TableCanvas({
                     data-piece-id={piece.id}
                     data-piece-template-id={piece.templateId}
                     data-piece-name={piece.name}
+                    data-piece-x={piece.x}
+                    data-piece-y={piece.y}
+                    data-piece-width={piece.width}
+                    data-piece-height={piece.height}
                     data-piece-rotation={piece.rotation}
                     transform={`translate(${pieceX} ${pieceY}) rotate(${piece.rotation})`}
                     onPointerDown={
@@ -621,6 +625,63 @@ export function TableCanvas({
                     >
                       {piece.name}
                     </text>
+
+                    {isSelected && !cleanOutput && piece.shape !== 'ellipse' && onRotateHandleMouseDown ? (
+                      (() => {
+                        const handleOffset = Math.max(piece.width, piece.height) / 2 + 2.4;
+
+                        return (
+                          <g>
+                            <line
+                              x1={0}
+                              y1={-piece.height / 2}
+                              x2={0}
+                              y2={-handleOffset + 0.55}
+                              stroke={SELECTION_STROKE}
+                              strokeOpacity={0.8}
+                              strokeWidth={0.18}
+                              pointerEvents="none"
+                            />
+                            <g
+                              data-testid="rotation-handle"
+                              onPointerDown={(event) => {
+                                event.stopPropagation();
+                              }}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                              }}
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                onRotateHandleMouseDown(piece.id, event as unknown as ReactMouseEvent<SVGGElement>);
+                              }}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              <circle
+                                cx={0}
+                                cy={-handleOffset}
+                                r={0.95}
+                                fill="#0f172a"
+                                stroke={SELECTION_STROKE}
+                                strokeWidth={0.25}
+                              />
+                              <text
+                                x={0}
+                                y={-handleOffset + 0.05}
+                                fill="#cffafe"
+                                fontSize={1.1}
+                                fontWeight={700}
+                                textAnchor="middle"
+                                dominantBaseline="middle"
+                                pointerEvents="none"
+                              >
+                                ↻
+                              </text>
+                            </g>
+                          </g>
+                        );
+                      })()
+                    ) : null}
                   </g>
                 );
               })}
@@ -646,6 +707,12 @@ export function TableCanvas({
                   />
                   <g
                     data-testid="rotation-handle"
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                    }}
                     onMouseDown={(event) => {
                       event.preventDefault();
                       event.stopPropagation();

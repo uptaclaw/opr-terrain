@@ -5,6 +5,7 @@ A Vite + React + TypeScript battlefield layout planner for One Page Rules style 
 ## Features
 
 - Drag-and-drop terrain layout editor on a gridded tabletop canvas
+- On-canvas selection and rotation handles for non-round terrain pieces
 - Named layout save/load with rename and delete via `localStorage`
 - Auto-saved working draft restored after refresh
 - Shareable URLs that encode the full layout in the hash
@@ -17,6 +18,47 @@ A Vite + React + TypeScript battlefield layout planner for One Page Rules style 
 - `npm run dev` — start the Vite dev server
 - `npm run build` — type-check and create a production build in `dist/`
 - `npm run test` — run the Vitest suite
+- `npm run test:e2e` — run the Playwright end-to-end suite
+- `npm run test:e2e:headed` — run e2e tests with a visible browser window
+- `npm run test:e2e:ui` — open Playwright UI mode for interactive debugging
+
+## E2E testing
+
+Playwright lives under `e2e/` and focuses on the highest-risk user flows that unit tests can miss:
+
+- dragging terrain from the library onto the board
+- selecting and rotating pieces on the actual rendered canvas
+- terrain regeneration
+- layout persistence across reloads
+- share URL reconstruction in a fresh browser context
+- line-of-sight overlays rendering and clearing
+
+### Run locally
+
+Install the Chromium browser once:
+
+```bash
+npx playwright install chromium
+```
+
+Then run the suite:
+
+```bash
+npm run test:e2e
+```
+
+By default, local e2e runs start the Vite dev server automatically. If you already have a server running, Playwright reuses it.
+
+### Debug a failure
+
+Use either of these when you need to watch the browser or inspect traces step-by-step:
+
+```bash
+npm run test:e2e:headed
+npm run test:e2e:ui
+```
+
+On failures, Playwright keeps screenshots, traces, and videos in `test-results/`, and the HTML report is written to `playwright-report/`.
 
 ## Deployment
 
@@ -34,14 +76,23 @@ With `nginx/default.conf` applied, the live site is served directly from the VM 
 
 ### GitHub Actions flow
 
-On every push to `main`, the workflow:
+The workflow now validates pull requests before deploy and only publishes after the same checks pass on `main`.
+
+On every pull request to `main`, the CI job:
 
 1. installs dependencies with `npm ci`
-2. builds the production bundle with `npm run build`
-3. ensures `/var/www/opr-terrain` exists over SSH
-4. rsyncs `dist/` to `/var/www/opr-terrain/`
-5. installs the static-only nginx config for that directory and reloads nginx
-6. verifies both the root page title and `/health` response
+2. installs the Playwright Chromium browser
+3. builds the production bundle with `npm run build`
+4. starts a local preview server from the built `dist/`
+5. runs `npm run test:e2e`
+6. fails the PR if any e2e test fails
+
+On every push to `main`, the workflow runs the same validation first and then:
+
+1. ensures `/var/www/opr-terrain` exists over SSH
+2. rsyncs `dist/` to `/var/www/opr-terrain/`
+3. installs the static-only nginx config for that directory and reloads nginx
+4. verifies both the root page title and `/health` response
 
 The same workflow also supports `workflow_dispatch` for manual re-runs after the workflow exists on `main`.
 

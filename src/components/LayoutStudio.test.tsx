@@ -179,16 +179,24 @@ describe('LayoutStudio', () => {
     expect(screen.getByText(/print preview/i)).toBeInTheDocument();
   });
 
-  it('removes the piece inspector sidebar and keeps selected-piece controls beneath the canvas', () => {
-    render(<LayoutStudio />);
+  it('removes the selected piece panel and shows an on-canvas rotation handle after selection', () => {
+    const { container } = render(<LayoutStudio />);
 
     expect(screen.queryByText(/^piece inspector$/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/^selected piece$/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /duplicate piece/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /delete piece/i })).toBeInTheDocument();
+    expect(screen.queryByText(/^selected piece$/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('rotation-handle')).not.toBeInTheDocument();
+
+    const centralRuins = container.querySelector(
+      '[data-testid="layout-terrain-piece"][data-piece-name="Central Ruins"]',
+    ) as SVGElement;
+
+    fireEvent.click(centralRuins);
+
+    expect(screen.getByTestId('rotation-handle')).toBeInTheDocument();
+    expect(screen.queryByText(/^selected piece$/i)).not.toBeInTheDocument();
   });
 
-  it('renders the terrain summary legend and updates it when traits change', () => {
+  it('renders the terrain summary legend and updates it when terrain is added to the layout', () => {
     render(<LayoutStudio />);
 
     expect(screen.getByRole('heading', { name: /terrain summary legend/i })).toBeInTheDocument();
@@ -200,9 +208,12 @@ describe('LayoutStudio', () => {
     expect(screen.getByTestId('terrain-summary-elevated')).toHaveTextContent('1 piece');
     expect(screen.getByTestId('terrain-summary-los-blocking')).toHaveTextContent('4 pieces');
 
-    fireEvent.click(screen.getByLabelText(/heavy cover/i));
+    const bunkerRow = screen.getByTestId('library-item-bunker');
+    fireEvent.click(within(bunkerRow).getByRole('button', { name: /add/i }));
 
-    expect(screen.getByTestId('terrain-summary-hard-cover')).toHaveTextContent('1 piece');
+    expect(screen.getByTestId('terrain-summary-impassable')).toHaveTextContent('2 pieces');
+    expect(screen.getByTestId('terrain-summary-hard-cover')).toHaveTextContent('3 pieces');
+    expect(screen.getByTestId('terrain-summary-los-blocking')).toHaveTextContent('5 pieces');
   });
 
   it('converts and renders a default generated layout through the shipped LayoutStudio path', async () => {
