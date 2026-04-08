@@ -1,7 +1,28 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AutoPlacementGenerator } from './AutoPlacementGenerator';
-import type { PlacementConfig } from '../terrain/types';
+import { generateTerrainLayout } from '../terrain/generateTerrainLayout';
+import type { GenerateTerrainLayoutOptions, PlacementConfig, TerrainLayout } from '../terrain/types';
+
+vi.mock('../terrain/generateTerrainLayout', () => ({
+  generateTerrainLayout: vi.fn(),
+}));
+
+const mockedGenerateTerrainLayout = vi.mocked(generateTerrainLayout);
+
+const createMockLayout = (): TerrainLayout => ({
+  widthInches: 48,
+  heightInches: 72,
+  deploymentDepthInches: 12,
+  targetPieceCount: 12,
+  quarterTargets: [3, 3, 3, 3],
+  pieces: [],
+});
+
+afterEach(() => {
+  mockedGenerateTerrainLayout.mockReset();
+  vi.restoreAllMocks();
+});
 
 describe('AutoPlacementGenerator', () => {
   it('initializes with default config when no initialConfig is provided', () => {
@@ -120,5 +141,43 @@ describe('AutoPlacementGenerator', () => {
 
     const prioritizeCoverCheckbox = screen.getByRole('checkbox', { name: /Prioritize Cover/i }) as HTMLInputElement;
     expect(prioritizeCoverCheckbox.checked).toBe(true);
+  });
+
+  it('uses a fresh random seed for rapid re-generation clicks', () => {
+    const randomSignatures: string[] = [];
+    mockedGenerateTerrainLayout.mockImplementation((options: GenerateTerrainLayoutOptions = {}) => {
+      expect(options.random).toBeTypeOf('function');
+
+      randomSignatures.push(
+        [options.random!(), options.random!(), options.random!()]
+          .map((value) => value.toFixed(8))
+          .join('|'),
+      );
+
+      return createMockLayout();
+    });
+
+    vi.spyOn(Date, 'now').mockReturnValue(1_716_099_200_000);
+    vi.spyOn(Math, 'random').mockReturnValue(0.5).mockReturnValueOnce(0.111111111).mockReturnValueOnce(0.222222222);
+
+    const onLayoutGenerated = vi.fn();
+
+    render(
+      <AutoPlacementGenerator
+        widthInches={48}
+        heightInches={72}
+        deploymentDepthInches={12}
+        onLayoutGenerated={onLayoutGenerated}
+      />,
+    );
+
+    const regenerateButton = screen.getByRole('button', { name: /re-generate terrain/i });
+    fireEvent.click(regenerateButton);
+    fireEvent.click(regenerateButton);
+
+    expect(mockedGenerateTerrainLayout).toHaveBeenCalledTimes(2);
+    expect(onLayoutGenerated).toHaveBeenCalledTimes(2);
+    expect(randomSignatures).toHaveLength(2);
+    expect(randomSignatures[0]).not.toBe(randomSignatures[1]);
   });
 });
