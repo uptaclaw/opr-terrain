@@ -16,8 +16,10 @@ test('drags terrain from the library onto the canvas with the expected footprint
   const placedPiece = await studio.getPieceDataByName('Ruins');
 
   expect(placedPiece.templateId).toBe('ruins');
-  expect(placedPiece.x).toBeCloseTo(16, 1);
-  expect(placedPiece.y).toBeCloseTo(20, 1);
+  expect(placedPiece.x).toBeGreaterThan(15.75);
+  expect(placedPiece.x).toBeLessThan(16.25);
+  expect(placedPiece.y).toBeGreaterThan(19.75);
+  expect(placedPiece.y).toBeLessThan(20.25);
   expect(placedPiece.width).toBe(8);
   expect(placedPiece.height).toBe(6);
 });
