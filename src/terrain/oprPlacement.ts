@@ -142,7 +142,7 @@ export const calculateMaxGap = (
   tableHeightInches: number,
 ): number => {
   // Create a simple grid to find largest empty areas
-  const gridSize = 1; // 1 inch cells
+  const gridSize = 2; // Use 2 inch cells for better performance
   const cols = Math.ceil(tableWidthInches / gridSize);
   const rows = Math.ceil(tableHeightInches / gridSize);
   
@@ -170,18 +170,21 @@ export const calculateMaxGap = (
   
   // Find largest contiguous empty area
   let maxGap = 0;
+  const globalVisited = new Set<string>(); // Track all processed cells
   
   for (let col = 0; col < cols; col++) {
     for (let row = 0; row < rows; row++) {
-      if (!occupied.has(`${col},${row}`)) {
+      const startKey = `${col},${row}`;
+      if (!occupied.has(startKey) && !globalVisited.has(startKey)) {
         // BFS to find size of this empty region
         const queue: Array<[number, number]> = [[col, row]];
-        const visited = new Set<string>([`${col},${row}`]);
+        const visited = new Set<string>([startKey]);
         let area = 0;
         
         while (queue.length > 0) {
           const [c, r] = queue.shift()!;
           area++;
+          globalVisited.add(`${c},${r}`); // Mark as processed globally
           
           // Check 4 neighbors
           for (const [dc, dr] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {

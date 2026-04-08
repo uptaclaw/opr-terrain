@@ -29,6 +29,7 @@ import {
   getQuarterIndex as getQuarterIndexUtil,
 } from './placementStrategies';
 import { buildOPRTerrainSelection, validateOPRLayout } from './oprPlacement';
+import { generateOPRCompliantLayout } from './zonePlacement';
 
 const DEFAULT_WIDTH = DEFAULT_TABLE_WIDTH_INCHES;
 const DEFAULT_HEIGHT = DEFAULT_TABLE_HEIGHT_INCHES;
@@ -208,7 +209,7 @@ const applyCoverPriority = (pieceSpecs: PositionedPieceSpec[]) => {
   });
 };
 
-const createPiece = (
+export const createPiece = (
   selection: PositionedPieceSpec,
   index: number,
   random: () => number,
@@ -937,6 +938,33 @@ export const generateTerrainLayout = (
     throw new Error('Terrain layout generator supports up to 20 pieces while keeping quarter balance.');
   }
 
+  // Try zone-based OPR-compliant placement first
+  const pieceSpecs = buildPieceSpecs(targetPieceCount, random);
+  const zoneResult = generateOPRCompliantLayout(
+    pieceSpecs,
+    widthInches,
+    heightInches,
+    deploymentDepthInches,
+    collisionBufferInches,
+    random,
+    maxLayoutAttempts,
+  );
+
+  if (zoneResult && zoneResult.success) {
+    // Zone placement succeeded and is OPR-compliant
+    return {
+      widthInches,
+      heightInches,
+      deploymentDepthInches,
+      targetPieceCount,
+      quarterTargets: [0, 0, 0, 0] as [number, number, number, number],
+      pieces: zoneResult.pieces,
+      placementConfig,
+      oprValidation: zoneResult.oprValidation,
+    };
+  }
+
+  // Fallback to original placement strategies if zone placement fails
   for (let layoutAttempt = 0; layoutAttempt < maxLayoutAttempts; layoutAttempt += 1) {
     const strategy = placementConfig?.strategy || 'random';
     const useMirroredPlacement =
@@ -981,13 +1009,13 @@ export const generateTerrainLayout = (
       ? buildQuarterTargets(targetPieceCount, random)
       : ([0, 0, 0, 0] as [number, number, number, number]);
     const quarterSequence = useQuarterPlacement ? buildQuarterSequence(quarterTargets, random) : [];
-    const pieceSpecs = buildPieceSpecs(targetPieceCount, random);
+    const fallbackPieceSpecs = buildPieceSpecs(targetPieceCount, random);
 
     if (placementConfig?.prioritizeCover) {
-      applyCoverPriority(pieceSpecs);
+      applyCoverPriority(fallbackPieceSpecs);
     }
 
-    const assignments = pieceSpecs
+    const assignments = fallbackPieceSpecs
       .map((pieceSpec, index) => ({
         piece: createPiece(pieceSpec, index, random),
         preferredQuarter: useQuarterPlacement ? (quarterSequence[index] ?? 0) : null,
