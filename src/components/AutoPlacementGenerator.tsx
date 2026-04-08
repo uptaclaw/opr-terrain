@@ -270,24 +270,18 @@ export function AutoPlacementGenerator({
           )}
         </div>
 
-        <div className="flex gap-3 pt-2">
+        <div className="pt-2">
           <button
             type="button"
             onClick={handleGenerate}
             disabled={isGenerating}
-            className="flex-1 rounded-2xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-2xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isGenerating ? 'Generating...' : 'Generate Layout'}
+            {isGenerating ? 'Generating...' : 'Generate / Re-generate Terrain'}
           </button>
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="rounded-2xl border border-cyan-400/40 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-            title="Re-generate Terrain"
-          >
-            Re-generate Terrain
-          </button>
+          <p className="mt-2 text-xs text-slate-400">
+            Each click creates a new random layout with OPR trait distribution
+          </p>
         </div>
 
         {error && (
