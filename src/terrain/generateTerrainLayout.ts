@@ -937,6 +937,16 @@ export const generateTerrainLayout = (
     throw new Error('Terrain layout generator supports up to 20 pieces while keeping quarter balance.');
   }
 
+  // Track the best layout we've seen (in case we can't find a perfect one)
+  // Note: Achieving perfect OPR compliance (especially max gap ≤6" and complete
+  // edge-to-edge sightline blocking) with random placement is challenging.
+  // The algorithm prioritizes core requirements (trait distribution, min spacing)
+  // and returns the best layout found within maxLayoutAttempts.
+  // Future enhancement: implement zone-based or grid-based placement for better
+  // spatial distribution and gap control.
+  let bestLayout: TerrainLayout | null = null;
+  let bestScore = -Infinity;
+
   for (let layoutAttempt = 0; layoutAttempt < maxLayoutAttempts; layoutAttempt += 1) {
     const strategy = placementConfig?.strategy || 'random';
     const useMirroredPlacement =
@@ -961,7 +971,8 @@ export const generateTerrainLayout = (
           widthInches,
           heightInches
         );
-        return {
+        
+        const layout = {
           widthInches,
           heightInches,
           deploymentDepthInches,
@@ -971,6 +982,18 @@ export const generateTerrainLayout = (
           placementConfig,
           oprValidation,
         };
+
+        // Return immediately if perfect
+        if (oprValidation.allValid) {
+          return layout;
+        }
+
+        // Track best layout based on how many criteria it meets
+        const score = calculateLayoutScore(oprValidation);
+        if (score > bestScore) {
+          bestScore = score;
+          bestLayout = layout;
+        }
       }
 
       continue;
@@ -1037,7 +1060,8 @@ export const generateTerrainLayout = (
         widthInches,
         heightInches
       );
-      return {
+      
+      const layout = {
         widthInches,
         heightInches,
         deploymentDepthInches,
@@ -1047,10 +1071,56 @@ export const generateTerrainLayout = (
         placementConfig,
         oprValidation,
       };
+
+      // Return immediately if perfect
+      if (oprValidation.allValid) {
+        return layout;
+      }
+
+      // Track best layout based on how many criteria it meets
+      const score = calculateLayoutScore(oprValidation);
+      if (score > bestScore) {
+        bestScore = score;
+        bestLayout = layout;
+      }
     }
   }
 
-  throw new Error('Unable to generate a valid terrain layout after repeated placement attempts.');
+  // If we found at least one valid placement, return the best one
+  if (bestLayout) {
+    return bestLayout;
+  }
+
+  throw new Error('Unable to generate a terrain layout after repeated placement attempts.');
+};
+
+/**
+ * Calculate a score for how well a layout meets OPR guidelines
+ * Higher score = better compliance
+ */
+const calculateLayoutScore = (validation: ReturnType<typeof validateOPRLayout>): number => {
+  let score = 0;
+  
+  // Critical requirements (worth more points)
+  if (validation.meetsMinPieces) score += 10;
+  if (validation.meetsDangerous) score += 10;
+  if (validation.meetsLosBlocking) score += 10;
+  if (validation.meetsCover) score += 8;
+  if (validation.meetsDifficult) score += 8;
+  if (validation.meetsMinGap) score += 10;
+  
+  // Important but harder to achieve perfectly
+  if (validation.meetsCoverage) score += 5;
+  if (!validation.edgeToEdgeClear) score += 5;
+  
+  // Very hard to achieve with random placement
+  if (validation.meetsMaxGap) score += 3;
+  
+  // Add fractional points for partial compliance
+  score += Math.min(validation.coveragePercent / 50, 1) * 2;
+  score += Math.min(validation.minGap / 3, 1) * 2;
+  
+  return score;
 };
 
 export const analyzeTerrainLayout = (

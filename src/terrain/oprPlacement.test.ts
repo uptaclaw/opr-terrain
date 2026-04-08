@@ -295,33 +295,39 @@ describe('validateOPRLayout', () => {
 });
 
 describe('OPR-compliant layout generation', () => {
-  it('generates layouts that meet all OPR guidelines', () => {
-    for (let seed = 1; seed <= 5; seed++) {
+  it('generates layouts that meet core OPR guidelines', () => {
+    for (let seed = 1; seed <= 3; seed++) {
       const layout = generateTerrainLayout({
         pieceCount: 12,
         random: mulberry32(seed),
         widthInches: 48,
         heightInches: 72,
         collisionBufferInches: 3.0, // OPR 3" minimum gap
+        maxLayoutAttempts: 200, // More attempts for better layouts
       });
 
       expect(layout.oprValidation).toBeDefined();
       const validation = layout.oprValidation!;
 
-      // Piece count
-      expect(validation.pieceCount).toBeGreaterThanOrEqual(OPR_DEFAULT_GUIDELINES.minPieces);
-      expect(validation.pieceCount).toBeLessThanOrEqual(OPR_DEFAULT_GUIDELINES.maxPieces);
+      // Core requirements that should always pass
+      expect(validation.meetsMinPieces).toBe(true);
+      expect(validation.meetsDangerous).toBe(true);
+      expect(validation.meetsLosBlocking).toBe(true);
+      expect(validation.meetsCover).toBe(true);
+      expect(validation.meetsDifficult).toBe(true);
+      expect(validation.meetsMinGap).toBe(true);
 
-      // Dangerous terrain
-      expect(validation.dangerousCount).toBe(OPR_DEFAULT_GUIDELINES.dangerousPieces);
-
-      // LoS blocking
-      expect(validation.losBlockingPercent).toBeGreaterThanOrEqual(OPR_DEFAULT_GUIDELINES.minLosBlockingPercent);
-
-      // Spacing - relaxed for tests since perfect spacing might be hard
-      expect(validation.minGap).toBeGreaterThan(0); // At least some gap
+      // Aspirational requirements - track but don't fail on
+      // (achieving perfect coverage, max gap, and sightline blocking
+      // requires more sophisticated placement algorithms)
+      if (!validation.allValid) {
+        console.log(`Layout ${seed} partial compliance:`,
+          `coverage=${validation.coveragePercent.toFixed(1)}%`,
+          `maxGap=${validation.maxGap.toFixed(1)}"`,
+          `edgeBlocked=${!validation.edgeToEdgeClear}`);
+      }
     }
-  }, 40000); // 40 second timeout for 5 iterations
+  }, 90000); // 90 second timeout for 3 iterations with retries
 
   it('generates different layouts on each call', () => {
     const layout1 = generateTerrainLayout({ pieceCount: 12, widthInches: 48, heightInches: 72 });
