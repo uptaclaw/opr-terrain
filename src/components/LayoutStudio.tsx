@@ -39,6 +39,7 @@ import { TERRAIN_LIBRARY_MIME_TYPE, TerrainPaletteTable } from './TerrainPalette
 import type { PieceFormData } from './TerrainPieceModal';
 import { AutoPlacementGenerator } from './AutoPlacementGenerator';
 import { TerrainSummaryLegend } from './TerrainSummaryLegend';
+import { OPRValidationDisplay } from './OPRValidationDisplay';
 import type { TerrainLayout } from '../terrain/types';
 
 type DragState = {
@@ -744,6 +745,7 @@ export function LayoutStudio() {
       ...current,
       pieces: convertedPieces,
       placementConfig: terrainLayout.placementConfig,
+      oprValidation: terrainLayout.oprValidation,
     }));
 
     setActiveSavedLayoutId(null);
@@ -1077,6 +1079,8 @@ export function LayoutStudio() {
             onLayoutGenerated={handleLayoutGenerated}
             initialConfig={layout.placementConfig}
           />
+
+          <OPRValidationDisplay validation={layout.oprValidation} />
 
           <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
             <div className="flex items-start justify-between gap-4">

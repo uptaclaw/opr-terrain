@@ -105,6 +105,29 @@ export interface TerrainLayout {
   quarterTargets: [number, number, number, number];
   pieces: TerrainPiece[];
   placementConfig?: PlacementConfig;
+  oprValidation?: OPRValidation;
+}
+
+export interface OPRValidation {
+  pieceCount: number;
+  meetsMinPieces: boolean;
+  meetsMaxPieces: boolean;
+  coveragePercent: number;
+  meetsCoverage: boolean;
+  losBlockingPercent: number;
+  meetsLosBlocking: boolean;
+  coverPercent: number;
+  meetsCover: boolean;
+  difficultPercent: number;
+  meetsDifficult: boolean;
+  dangerousCount: number;
+  meetsDangerous: boolean;
+  minGap: number;
+  maxGap: number;
+  meetsMinGap: boolean;
+  meetsMaxGap: boolean;
+  edgeToEdgeClear: boolean;
+  allValid: boolean;
 }
 
 export interface TerrainLayoutAnalysis {

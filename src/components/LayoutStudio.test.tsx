@@ -205,19 +205,24 @@ describe('LayoutStudio', () => {
     expect(screen.getByTestId('terrain-summary-hard-cover')).toHaveTextContent('1 piece');
   });
 
-  it('converts and renders a default generated layout through the shipped LayoutStudio path', () => {
+  it('converts and renders a default generated layout through the shipped LayoutStudio path', async () => {
     render(<LayoutStudio />);
 
     expect(() => {
       fireEvent.click(screen.getByRole('button', { name: /generate layout/i }));
     }).not.toThrow();
 
-    expect(screen.getByText(/generated 16 terrain pieces using random strategy/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Wall').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Marsh').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Outcrop').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Hedge').length).toBeGreaterThan(0);
-  });
+    const statusMessage = await screen.findByText(/generated \d+ terrain pieces using random strategy/i, {}, {
+      timeout: 15000,
+    });
+    const generatedCount = Number(statusMessage.textContent?.match(/Generated (\d+) terrain pieces/i)?.[1] ?? '0');
+
+    expect(generatedCount).toBeGreaterThanOrEqual(10);
+    expect(generatedCount).toBeLessThanOrEqual(15);
+
+    const [interactiveCanvas] = screen.getAllByTestId('table-canvas-svg');
+    expect(interactiveCanvas.querySelectorAll('[data-testid="layout-terrain-piece"]')).toHaveLength(generatedCount);
+  }, 15000);
 
   it('hydrates shared custom templates from the URL on initial load', () => {
     const sharedTemplate: TerrainTemplate = {

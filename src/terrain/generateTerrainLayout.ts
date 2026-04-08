@@ -28,13 +28,14 @@ import {
   getPlacementDensityMultiplier,
   getQuarterIndex as getQuarterIndexUtil,
 } from './placementStrategies';
+import { buildOPRTerrainSelection, validateOPRLayout } from './oprPlacement';
 
 const DEFAULT_WIDTH = DEFAULT_TABLE_WIDTH_INCHES;
 const DEFAULT_HEIGHT = DEFAULT_TABLE_HEIGHT_INCHES;
 const DEFAULT_DEPLOYMENT_DEPTH = DEFAULT_DEPLOYMENT_DEPTH_INCHES;
-const DEFAULT_MIN_PIECES = 15;
-const DEFAULT_MAX_PIECES = 20;
-const DEFAULT_COLLISION_BUFFER = 0.8;
+const DEFAULT_MIN_PIECES = 10;
+const DEFAULT_MAX_PIECES = 15;
+const DEFAULT_COLLISION_BUFFER = 3.0; // OPR guideline: 3" minimum gap
 const DEFAULT_MAX_ATTEMPTS_PER_PIECE = 360;
 const DEFAULT_MAX_LAYOUT_ATTEMPTS = 100;
 const DEPLOYMENT_CENTER_CLEARANCE = 4.5;
@@ -166,7 +167,13 @@ const buildQuarterSequence = (
   return shuffle(quarterSlots, random);
 };
 
-const buildPieceSpecs = (pieceCount: number, random: () => number): PositionedPieceSpec[] => {
+const buildPieceSpecs = (pieceCount: number, random: () => number, useOPRGuidelines = true): PositionedPieceSpec[] => {
+  if (useOPRGuidelines) {
+    // Use OPR-compliant selection that ensures trait distribution
+    return buildOPRTerrainSelection(pieceCount, random);
+  }
+  
+  // Legacy behavior
   const selections: PositionedPieceSpec[] = mandatoryTerrainSelections
     .slice(0, Math.min(pieceCount, mandatoryTerrainSelections.length))
     .map((selection) => ({ ...selection }));
@@ -949,6 +956,11 @@ export const generateTerrainLayout = (
       );
 
       if (mirroredLayout) {
+        const oprValidation = validateOPRLayout(
+          mirroredLayout.pieces,
+          widthInches,
+          heightInches
+        );
         return {
           widthInches,
           heightInches,
@@ -957,6 +969,7 @@ export const generateTerrainLayout = (
           quarterTargets: mirroredLayout.quarterTargets,
           pieces: mirroredLayout.pieces,
           placementConfig,
+          oprValidation,
         };
       }
 
@@ -1019,6 +1032,11 @@ export const generateTerrainLayout = (
     }
 
     if (!failedPlacement) {
+      const oprValidation = validateOPRLayout(
+        placedPieces,
+        widthInches,
+        heightInches
+      );
       return {
         widthInches,
         heightInches,
@@ -1027,6 +1045,7 @@ export const generateTerrainLayout = (
         quarterTargets,
         pieces: placedPieces,
         placementConfig,
+        oprValidation,
       };
     }
   }
