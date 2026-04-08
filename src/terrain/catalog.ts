@@ -124,6 +124,16 @@ const buildOutcropPolygon = (random: () => number): TerrainShape => ({
   ),
 });
 
+const buildOutcropPolygonMedium = (random: () => number): TerrainShape => ({
+  kind: 'polygon',
+  points: scalePolygon(
+    pickOne(OUTCROP_POLYGONS, random),
+    randomBetween(3.5, 5.5, random),
+    randomBetween(3.5, 5.5, random),
+    random,
+  ),
+});
+
 const buildStripPolygon = (
   random: () => number,
   minX: number,
@@ -168,8 +178,8 @@ export const terrainCatalog: readonly TerrainTemplate[] = [
     shapeKinds: ['circle', 'polygon'],
     buildShape: (shapeKind, random) =>
       shapeKind === 'circle'
-        ? circle(2.6, 4.2, random)
-        : buildBroadPolygon(random, 3, 4.2, 2.8, 4),
+        ? circle(4.5, 7.0, random)
+        : buildBroadPolygon(random, 4.8, 7.0, 4.5, 6.5),
   },
   {
     id: 'ruins',
@@ -180,8 +190,8 @@ export const terrainCatalog: readonly TerrainTemplate[] = [
     shapeKinds: ['rectangle', 'polygon'],
     buildShape: (shapeKind, random) =>
       shapeKind === 'rectangle'
-        ? rectangle(3.8, 6, 3, 4.8, random)
-        : buildBroadPolygon(random, 2.8, 4, 2.6, 3.8),
+        ? rectangle(6.5, 9.5, 5.5, 8.0, random)
+        : buildBroadPolygon(random, 4.5, 6.5, 4.0, 6.0),
   },
   {
     id: 'hill',
@@ -192,8 +202,8 @@ export const terrainCatalog: readonly TerrainTemplate[] = [
     shapeKinds: ['circle', 'polygon'],
     buildShape: (shapeKind, random) =>
       shapeKind === 'circle'
-        ? circle(3.2, 4.5, random)
-        : buildBroadPolygon(random, 3.3, 4.8, 2.8, 4),
+        ? circle(5.5, 7.5, random)
+        : buildBroadPolygon(random, 5.5, 8.0, 5.0, 7.0),
   },
   {
     id: 'wall',
@@ -202,7 +212,7 @@ export const terrainCatalog: readonly TerrainTemplate[] = [
     traits: ['Soft Cover'],
     weight: 2,
     shapeKinds: ['rectangle'],
-    buildShape: (_shapeKind, random) => rectangle(5.8, 8.5, 1.2, 1.8, random),
+    buildShape: (_shapeKind, random) => rectangle(9.0, 13.0, 2.0, 2.8, random),
   },
   {
     id: 'marsh',
@@ -213,8 +223,8 @@ export const terrainCatalog: readonly TerrainTemplate[] = [
     shapeKinds: ['polygon', 'rectangle'],
     buildShape: (shapeKind, random) =>
       shapeKind === 'rectangle'
-        ? rectangle(5, 7.5, 2, 3.2, random)
-        : buildStripPolygon(random, 3.4, 5, 1.6, 2.8),
+        ? rectangle(8.0, 11.0, 3.5, 5.5, random)
+        : buildStripPolygon(random, 5.5, 8.0, 2.5, 4.5),
   },
   {
     id: 'outcrop',
@@ -224,7 +234,7 @@ export const terrainCatalog: readonly TerrainTemplate[] = [
     weight: 2,
     shapeKinds: ['polygon', 'circle'],
     buildShape: (shapeKind, random) =>
-      shapeKind === 'circle' ? circle(2.2, 3, random) : buildOutcropPolygon(random),
+      shapeKind === 'circle' ? circle(3.5, 5.5, random) : buildOutcropPolygonMedium(random),
   },
   {
     id: 'hedge',
@@ -235,8 +245,8 @@ export const terrainCatalog: readonly TerrainTemplate[] = [
     shapeKinds: ['rectangle', 'polygon'],
     buildShape: (shapeKind, random) =>
       shapeKind === 'rectangle'
-        ? rectangle(4.8, 7, 1.5, 2.2, random)
-        : buildStripPolygon(random, 3, 4, 1, 1.8),
+        ? rectangle(7.5, 11.0, 2.2, 3.5, random)
+        : buildStripPolygon(random, 5.0, 7.0, 1.8, 3.2),
   },
 ] as const;
 

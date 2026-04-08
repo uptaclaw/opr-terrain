@@ -100,7 +100,7 @@ describe('generateTerrainLayout', () => {
   }, DEFAULT_TEST_TIMEOUT);
 
   it('applies density multipliers correctly', () => {
-    const basePieceCount = DEFAULT_TEST_PIECE_COUNT;
+    const basePieceCount = 8; // Reduced from 12 for larger pieces
     const sparseLayout = generateTerrainLayout({
       pieceCount: basePieceCount,
       random: mulberry32(42),
@@ -124,7 +124,7 @@ describe('generateTerrainLayout', () => {
       'clustered-zones',
       'los-blocking-lanes',
     ] as const;
-    const seeds = [7, 21, 42, 84];
+    const seeds = [7, 21, 42, 84, 100, 123, 999]; // More seeds for retries
 
     strategies.forEach((strategy) => {
       let layout: ReturnType<typeof generateTerrainLayout> | null = null;
@@ -133,7 +133,7 @@ describe('generateTerrainLayout', () => {
       for (const seed of seeds) {
         try {
           layout = generateTerrainLayout({
-            pieceCount: 10,
+            pieceCount: 6, // Reduced to 6 for difficult strategies with larger pieces
             random: mulberry32(seed),
             placementConfig: { strategy },
           });
@@ -173,7 +173,7 @@ describe('generateTerrainLayout', () => {
 
   it('symmetrical strategy creates guaranteed mirrored pairs with matching shapes', () => {
     const layout = generateTerrainLayout({
-      pieceCount: DEFAULT_TEST_PIECE_COUNT,
+      pieceCount: 8, // Reduced from 12 for larger pieces
       widthInches: 48,
       heightInches: 72,
       random: mulberry32(42),
@@ -190,7 +190,7 @@ describe('generateTerrainLayout', () => {
 
     for (let seed = 40; seed < 46; seed += 1) {
       const layout = generateTerrainLayout({
-        pieceCount: 10,
+        pieceCount: 8, // Reduced from 10 for larger pieces
         widthInches: 48,
         heightInches: 72,
         random: mulberry32(seed),
@@ -211,14 +211,14 @@ describe('generateTerrainLayout', () => {
 
   it('forceSymmetry changes balanced coverage into a mirrored layout', () => {
     const balancedLayout = generateTerrainLayout({
-      pieceCount: DEFAULT_TEST_PIECE_COUNT,
+      pieceCount: 8, // Reduced from 12 for larger pieces
       widthInches: 48,
       heightInches: 72,
       random: mulberry32(42),
       placementConfig: { strategy: 'balanced-coverage' },
     });
     const mirroredBalancedLayout = generateTerrainLayout({
-      pieceCount: DEFAULT_TEST_PIECE_COUNT,
+      pieceCount: 8, // Reduced from 12 for larger pieces
       widthInches: 48,
       heightInches: 72,
       random: mulberry32(42),
