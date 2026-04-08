@@ -26,6 +26,54 @@ const createPiece = (id: string, traits: TerrainTrait[], overrides: Partial<Terr
   ...overrides,
 });
 
+const createGridPiece = (
+  id: string,
+  x: number,
+  y: number,
+  traits: TerrainTrait[] = [],
+  overrides: Partial<TerrainPiece> = {}
+): TerrainPiece => createPiece(id, traits, { x, y, ...overrides });
+
+const createLoSBlockingTrait = () =>
+  createTrait({ id: 'los-blocking', label: 'LoS Blocking', category: 'los' });
+
+const createHardCoverTrait = () =>
+  createTrait({ id: 'hard-cover', label: 'Hard Cover', category: 'cover' });
+
+const createSoftCoverTrait = () =>
+  createTrait({ id: 'soft-cover', label: 'Soft Cover', category: 'cover' });
+
+const createDifficultTrait = () =>
+  createTrait({ id: 'difficult', label: 'Difficult', category: 'movement' });
+
+const createDangerousTrait = () =>
+  createTrait({ id: 'dangerous', label: 'Dangerous', category: 'movement' });
+
+const createPerfectLayoutPieces = (): TerrainPiece[] => {
+  const columnPositions = [8, 24, 40];
+  const rowPositions = [5, 17, 29, 41];
+  let pieceIndex = 0;
+
+  return rowPositions.flatMap((y) =>
+    columnPositions.map((x) => {
+      pieceIndex += 1;
+
+      const traits: TerrainTrait[] = [createLoSBlockingTrait()];
+
+      if (pieceIndex <= 4) {
+        traits.push(pieceIndex % 2 === 0 ? createSoftCoverTrait() : createHardCoverTrait());
+        traits.push(createDifficultTrait());
+      }
+
+      if (pieceIndex <= 2) {
+        traits.push(createDangerousTrait());
+      }
+
+      return createGridPiece(`${pieceIndex}`, x, y, traits, { width: 10, height: 10 });
+    })
+  );
+};
+
 describe('OPRValidationDashboard', () => {
   it('renders the validation dashboard with all metrics', () => {
     const pieces = [
@@ -56,48 +104,18 @@ describe('OPRValidationDashboard', () => {
     expect(screen.getByTestId('validation-metric-spacing')).toBeInTheDocument();
   });
 
-  it('displays good status when most checks pass', () => {
-    const pieces = [
-      createPiece('1', [
-        createTrait({ id: 'los-blocking', label: 'LoS Blocking', category: 'los' }),
-        createTrait({ id: 'hard-cover', label: 'Hard Cover', category: 'cover' }),
-        createTrait({ id: 'difficult', label: 'Difficult', category: 'movement' }),
-      ], { width: 8, height: 6 }),
-      createPiece('2', [
-        createTrait({ id: 'los-blocking', label: 'LoS Blocking', category: 'los' }),
-        createTrait({ id: 'soft-cover', label: 'Soft Cover', category: 'cover' }),
-        createTrait({ id: 'difficult', label: 'Difficult', category: 'movement' }),
-      ], { width: 8, height: 6 }),
-      createPiece('3', [
-        createTrait({ id: 'los-blocking', label: 'LoS Blocking', category: 'los' }),
-        createTrait({ id: 'hard-cover', label: 'Hard Cover', category: 'cover' }),
-        createTrait({ id: 'difficult', label: 'Difficult', category: 'movement' }),
-      ], { width: 8, height: 6 }),
-      createPiece('4', [
-        createTrait({ id: 'los-blocking', label: 'LoS Blocking', category: 'los' }),
-        createTrait({ id: 'soft-cover', label: 'Soft Cover', category: 'cover' }),
-        createTrait({ id: 'difficult', label: 'Difficult', category: 'movement' }),
-      ], { width: 8, height: 6 }),
-      createPiece('5', [
-        createTrait({ id: 'los-blocking', label: 'LoS Blocking', category: 'los' }),
-        createTrait({ id: 'hard-cover', label: 'Hard Cover', category: 'cover' }),
-        createTrait({ id: 'dangerous', label: 'Dangerous', category: 'movement' }),
-      ], { width: 8, height: 6 }),
-      createPiece('6', [
-        createTrait({ id: 'los-blocking', label: 'LoS Blocking', category: 'los' }),
-        createTrait({ id: 'soft-cover', label: 'Soft Cover', category: 'cover' }),
-        createTrait({ id: 'dangerous', label: 'Dangerous', category: 'movement' }),
-      ], { width: 8, height: 6 }),
-      createPiece('7', [createTrait({ id: 'hard-cover', label: 'Hard Cover', category: 'cover' })], { width: 8, height: 6 }),
-      createPiece('8', [createTrait({ id: 'soft-cover', label: 'Soft Cover', category: 'cover' })], { width: 8, height: 6 }),
-      createPiece('9', [], { width: 8, height: 6 }),
-      createPiece('10', [], { width: 8, height: 6 }),
-    ];
+  it('displays a perfect 7/7 result when every check passes', () => {
+    render(
+      <OPRValidationDashboard
+        pieces={createPerfectLayoutPieces()}
+        tableWidthInches={48}
+        tableHeightInches={48}
+      />
+    );
 
-    render(<OPRValidationDashboard pieces={pieces} tableWidthInches={48} tableHeightInches={48} />);
-
-    // Should show good or warning status (coverage depends on calculation)
-    expect(screen.getByText(/All checks passed|Some warnings|Issues detected/)).toBeInTheDocument();
+    expect(screen.getByText('All checks passed')).toBeInTheDocument();
+    expect(screen.getByText('7/7 passed')).toBeInTheDocument();
+    expect(screen.getByTestId('validation-metric-spacing')).toHaveTextContent('Good spacing');
   });
 
   it('displays warning status when some checks fail', () => {

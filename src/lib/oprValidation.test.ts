@@ -25,6 +25,68 @@ const createPiece = (id: string, traits: TerrainTrait[], overrides: Partial<Terr
   ...overrides,
 });
 
+const createGridPiece = (
+  id: string,
+  x: number,
+  y: number,
+  traits: TerrainTrait[] = [],
+  overrides: Partial<TerrainPiece> = {}
+): TerrainPiece => createPiece(id, traits, { x, y, ...overrides });
+
+const createLoSBlockingTrait = () =>
+  createTrait({ id: 'los-blocking', label: 'LoS Blocking', category: 'los' });
+
+const createHardCoverTrait = () =>
+  createTrait({ id: 'hard-cover', label: 'Hard Cover', category: 'cover' });
+
+const createSoftCoverTrait = () =>
+  createTrait({ id: 'soft-cover', label: 'Soft Cover', category: 'cover' });
+
+const createDifficultTrait = () =>
+  createTrait({ id: 'difficult', label: 'Difficult', category: 'movement' });
+
+const createDangerousTrait = () =>
+  createTrait({ id: 'dangerous', label: 'Dangerous', category: 'movement' });
+
+const createPerfectLayoutPieces = (rowPositions = [5, 17, 29, 41]): TerrainPiece[] => {
+  const columnPositions = [8, 24, 40];
+  let pieceIndex = 0;
+
+  return rowPositions.flatMap((y) =>
+    columnPositions.map((x) => {
+      pieceIndex += 1;
+
+      const traits: TerrainTrait[] = [createLoSBlockingTrait()];
+
+      if (pieceIndex <= 4) {
+        traits.push(pieceIndex % 2 === 0 ? createSoftCoverTrait() : createHardCoverTrait());
+        traits.push(createDifficultTrait());
+      }
+
+      if (pieceIndex <= 2) {
+        traits.push(createDangerousTrait());
+      }
+
+      return createGridPiece(`${pieceIndex}`, x, y, traits, { width: 10, height: 10 });
+    })
+  );
+};
+
+const createWellSpacedPieces = (rowPositions = [8, 24, 40]): TerrainPiece[] => {
+  const columnPositions = [8, 24, 40];
+  let pieceIndex = 0;
+
+  return rowPositions.flatMap((y) =>
+    columnPositions.map((x) => {
+      pieceIndex += 1;
+      return createGridPiece(`${pieceIndex}`, x, y, [createLoSBlockingTrait()], {
+        width: 10,
+        height: 10,
+      });
+    })
+  );
+};
+
 describe('oprValidation', () => {
   describe('validateOPRTerrain', () => {
     it('validates piece count within recommended range (10-15)', () => {
@@ -231,49 +293,15 @@ describe('oprValidation', () => {
       expect(result.overallStatus).toBe('fail');
     });
 
-    it('calculates overall status correctly', () => {
-      // All good - use larger pieces to meet coverage requirement
-      const goodPieces = [
-        createPiece('1', [
-          createTrait({ id: 'los-blocking', label: 'LoS Blocking', category: 'los' }),
-          createTrait({ id: 'hard-cover', label: 'Hard Cover', category: 'cover' }),
-          createTrait({ id: 'difficult', label: 'Difficult', category: 'movement' }),
-        ], { width: 12, height: 10 }),
-        createPiece('2', [
-          createTrait({ id: 'los-blocking', label: 'LoS Blocking', category: 'los' }),
-          createTrait({ id: 'soft-cover', label: 'Soft Cover', category: 'cover' }),
-          createTrait({ id: 'difficult', label: 'Difficult', category: 'movement' }),
-        ], { width: 12, height: 10 }),
-        createPiece('3', [
-          createTrait({ id: 'los-blocking', label: 'LoS Blocking', category: 'los' }),
-          createTrait({ id: 'hard-cover', label: 'Hard Cover', category: 'cover' }),
-          createTrait({ id: 'difficult', label: 'Difficult', category: 'movement' }),
-        ], { width: 12, height: 10 }),
-        createPiece('4', [
-          createTrait({ id: 'los-blocking', label: 'LoS Blocking', category: 'los' }),
-          createTrait({ id: 'soft-cover', label: 'Soft Cover', category: 'cover' }),
-          createTrait({ id: 'difficult', label: 'Difficult', category: 'movement' }),
-        ], { width: 12, height: 10 }),
-        createPiece('5', [
-          createTrait({ id: 'los-blocking', label: 'LoS Blocking', category: 'los' }),
-          createTrait({ id: 'hard-cover', label: 'Hard Cover', category: 'cover' }),
-          createTrait({ id: 'dangerous', label: 'Dangerous', category: 'movement' }),
-        ], { width: 12, height: 10 }),
-        createPiece('6', [
-          createTrait({ id: 'los-blocking', label: 'LoS Blocking', category: 'los' }),
-          createTrait({ id: 'soft-cover', label: 'Soft Cover', category: 'cover' }),
-          createTrait({ id: 'dangerous', label: 'Dangerous', category: 'movement' }),
-        ], { width: 12, height: 10 }),
-        createPiece('7', [createTrait({ id: 'hard-cover', label: 'Hard Cover', category: 'cover' })], { width: 12, height: 10 }),
-        createPiece('8', [createTrait({ id: 'soft-cover', label: 'Soft Cover', category: 'cover' })], { width: 12, height: 10 }),
-        createPiece('9', [], { width: 12, height: 10 }),
-        createPiece('10', [], { width: 12, height: 10 }),
-      ];
+    it('can reach a fully compliant 7/7 layout', () => {
+      const goodResult = validateOPRTerrain(createPerfectLayoutPieces(), 48, 48);
+      const spacingMetric = goodResult.metrics.find((metric) => metric.id === 'spacing');
 
-      const goodResult = validateOPRTerrain(goodPieces, 48, 48);
-      // All checks should now pass (except potentially spacing)
-      expect(goodResult.passedCount).toBeGreaterThanOrEqual(6);
-      expect(goodResult.overallStatus).toMatch(/good|warning/);
+      expect(goodResult.passedCount).toBe(7);
+      expect(goodResult.totalCount).toBe(7);
+      expect(goodResult.overallStatus).toBe('good');
+      expect(spacingMetric?.status).toBe('good');
+      expect(spacingMetric?.message).toBe('Good spacing');
     });
 
     // Tests for issue requirements: status thresholds and spacing
@@ -412,28 +440,21 @@ describe('oprValidation', () => {
       });
 
       it('shows good spacing when pieces are well distributed', () => {
-        // Pieces spread across the table with reasonable coverage
-        // The key is: no *egregious* spacing issues that would block the game
-        const pieces = [
-          createPiece('1', [], { x: 6, y: 6, width: 8, height: 8 }),
-          createPiece('2', [], { x: 14, y: 6, width: 8, height: 8 }),
-          createPiece('3', [], { x: 22, y: 6, width: 8, height: 8 }),
-          createPiece('4', [], { x: 30, y: 6, width: 8, height: 8 }),
-          createPiece('5', [], { x: 38, y: 6, width: 8, height: 8 }),
-          createPiece('6', [], { x: 6, y: 18, width: 8, height: 8 }),
-          createPiece('7', [], { x: 18, y: 18, width: 8, height: 8 }),
-          createPiece('8', [], { x: 30, y: 18, width: 8, height: 8 }),
-          createPiece('9', [], { x: 42, y: 18, width: 8, height: 8 }),
-          createPiece('10', [], { x: 6, y: 42, width: 8, height: 8 }),
-        ];
+        const result = validateOPRTerrain(createWellSpacedPieces(), 48, 48);
+        const spacingMetric = result.metrics.find((m) => m.id === 'spacing');
+
+        expect(spacingMetric?.status).toBe('good');
+        expect(spacingMetric?.message).toBe('Good spacing');
+      });
+
+      it('keeps movement corridor checks local instead of failing on one tight pair', () => {
+        const pieces = createPerfectLayoutPieces([5, 16, 29, 41]);
 
         const result = validateOPRTerrain(pieces, 48, 48);
         const spacingMetric = result.metrics.find((m) => m.id === 'spacing');
 
-        // With this distribution, there will still be some large gaps,
-        // but the spacing analysis is more about detecting *severe* problems
-        // So we accept warning status for realistic layouts
-        expect(spacingMetric?.status).toMatch(/good|warning/);
+        expect(spacingMetric?.status).toBe('good');
+        expect(spacingMetric?.message).toBe('Good spacing');
       });
 
       it('exists as the 7th metric', () => {
