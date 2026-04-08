@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { LayoutStudio } from './LayoutStudio';
 import { TABLE_SCENE_MARGIN } from './TableCanvas';
 import { TERRAIN_LIBRARY_MIME_TYPE } from './TerrainPaletteTable';
-import { createDefaultLayout, createTerrainPiece } from '../data/terrainCatalog';
+import { createDefaultLayout, createTerrainPiece, terrainCatalog } from '../data/terrainCatalog';
 import { CUSTOM_PIECES_STORAGE_KEY, PRESET_OVERRIDES_STORAGE_KEY } from '../lib/customPieces';
 import { encodeLayoutHash } from '../lib/layout';
 import type { TerrainTemplate } from '../types/layout';
@@ -348,5 +348,64 @@ describe('LayoutStudio', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(getCustomLibraryRows()).toHaveLength(initialCustomPieceCount);
     expect(window.localStorage.getItem(CUSTOM_PIECES_STORAGE_KEY)).toBeNull();
+  });
+
+  it('runs the LoS check on demand, draws clear sightlines, and clears them again', async () => {
+    const openLayout = createDefaultLayout();
+    openLayout.table = {
+      ...openLayout.table,
+      widthInches: 24,
+      heightInches: 24,
+      deploymentDepthInches: 6,
+      title: 'Open Table',
+    };
+    openLayout.pieces = [];
+    window.history.replaceState(window.history.state, '', `/#${encodeLayoutHash(openLayout)}`);
+
+    render(<LayoutStudio />);
+
+    fireEvent.click(screen.getByRole('button', { name: /check line of sight/i }));
+
+    expect(screen.getByRole('button', { name: /checking line of sight/i })).toBeDisabled();
+    expect(await screen.findByText(/found 625 clear sightlines/i)).toBeInTheDocument();
+
+    const [interactiveCanvas] = screen.getAllByTestId('table-canvas-svg');
+    expect(interactiveCanvas.querySelectorAll('[data-testid="los-clear-sightline"]')).toHaveLength(625);
+
+    fireEvent.click(screen.getByRole('button', { name: /clear los check/i }));
+
+    await waitFor(() => {
+      expect(interactiveCanvas.querySelectorAll('[data-testid="los-clear-sightline"]')).toHaveLength(0);
+    });
+  });
+
+  it('shows a success message when every long-edge sightline is blocked', async () => {
+    const blockedLayout = createDefaultLayout();
+    blockedLayout.table = {
+      ...blockedLayout.table,
+      widthInches: 24,
+      heightInches: 24,
+      deploymentDepthInches: 6,
+      title: 'Blocked Table',
+    };
+    blockedLayout.pieces = [
+      createTerrainPiece(terrainCatalog[0], { x: 12, y: 12 }, {
+        name: 'Center Wall',
+        shape: 'rect',
+        width: 2,
+        height: 24,
+        rotation: 0,
+      }),
+    ];
+    window.history.replaceState(window.history.state, '', `/#${encodeLayoutHash(blockedLayout)}`);
+
+    render(<LayoutStudio />);
+
+    fireEvent.click(screen.getByRole('button', { name: /check line of sight/i }));
+
+    expect(await screen.findByText(/no edge-to-edge sightlines across 625 lines checked/i)).toBeInTheDocument();
+
+    const [interactiveCanvas] = screen.getAllByTestId('table-canvas-svg');
+    expect(interactiveCanvas.querySelectorAll('[data-testid="los-clear-sightline"]')).toHaveLength(0);
   });
 });

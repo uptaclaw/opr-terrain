@@ -33,6 +33,10 @@ import {
   updateCustomPiece,
   type CustomPieceDefinition,
 } from '../lib/customPieces';
+import {
+  findClearEdgeToEdgeSightlinesForLayout,
+  type EdgeToEdgeSightlineResult,
+} from '../lib/lineOfSight';
 import type { LayoutState, SavedLayoutRecord, TerrainPiece, TerrainTrait, TerrainTemplate } from '../types/layout';
 import { formatInches, formatTableMeasure, getSceneSize, TABLE_SCENE_MARGIN, TableCanvas } from './TableCanvas';
 import { TERRAIN_LIBRARY_MIME_TYPE, TerrainPaletteTable } from './TerrainPaletteTable';
@@ -49,6 +53,12 @@ type DragState = {
   startPieceX: number;
   startPieceY: number;
 };
+
+type LosCheckState =
+  | { status: 'idle' }
+  | { status: 'stale' }
+  | { status: 'loading' }
+  | { status: 'done'; result: EdgeToEdgeSightlineResult };
 
 const formatUpdatedAt = (value: string) => {
   try {
@@ -307,6 +317,23 @@ const createInitialStudioState = (): InitialStudioState => {
   };
 };
 
+const serializeLayoutForLosCache = (layout: LayoutState) =>
+  JSON.stringify({
+    widthInches: layout.table.widthInches,
+    heightInches: layout.table.heightInches,
+    pieces: [...layout.pieces]
+      .map((piece) => ({
+        id: piece.id,
+        shape: piece.shape,
+        width: piece.width,
+        height: piece.height,
+        x: piece.x,
+        y: piece.y,
+        rotation: piece.rotation,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  });
+
 export function LayoutStudio() {
   const [initialStudioState] = useState(createInitialStudioState);
   const [layout, setLayout] = useState<LayoutState>(initialStudioState.layout);
@@ -324,11 +351,14 @@ export function LayoutStudio() {
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [libraryDragActive, setLibraryDragActive] = useState(false);
+  const [losCheckState, setLosCheckState] = useState<LosCheckState>({ status: 'idle' });
   const svgRef = useRef<SVGSVGElement | null>(null);
   const cleanSvgRef = useRef<SVGSVGElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
   const layoutRef = useRef(layout);
   const customPiecesRef = useRef(customPieces);
+  const losCheckCacheRef = useRef<{ key: string; result: EdgeToEdgeSightlineResult } | null>(null);
+  const losCheckRunIdRef = useRef(0);
 
   useEffect(() => {
     layoutRef.current = layout;
@@ -471,6 +501,24 @@ export function LayoutStudio() {
     () => layout.pieces.find((piece) => piece.id === selectedPieceId) ?? null,
     [layout.pieces, selectedPieceId],
   );
+
+  const losCheckCacheKey = useMemo(() => serializeLayoutForLosCache(layout), [layout]);
+
+  useEffect(() => {
+    losCheckRunIdRef.current += 1;
+
+    if (losCheckCacheRef.current && losCheckCacheRef.current.key !== losCheckCacheKey) {
+      losCheckCacheRef.current = null;
+    }
+
+    setLosCheckState((current) => {
+      if (current.status === 'done' || current.status === 'loading') {
+        return { status: 'stale' };
+      }
+
+      return current;
+    });
+  }, [losCheckCacheKey]);
 
   const resolvedPresets = useMemo(
     () =>
@@ -755,6 +803,48 @@ export function LayoutStudio() {
     );
   };
 
+  const handleRunLosCheck = async () => {
+    if (losCheckCacheRef.current?.key === losCheckCacheKey) {
+      setLosCheckState({
+        status: 'done',
+        result: losCheckCacheRef.current.result,
+      });
+      return;
+    }
+
+    const runId = losCheckRunIdRef.current + 1;
+    losCheckRunIdRef.current = runId;
+    setLosCheckState({ status: 'loading' });
+
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+
+    if (losCheckRunIdRef.current !== runId) {
+      return;
+    }
+
+    const result = findClearEdgeToEdgeSightlinesForLayout(
+      layoutRef.current.pieces,
+      layoutRef.current.table.widthInches,
+      layoutRef.current.table.heightInches,
+    );
+    const cacheKey = serializeLayoutForLosCache(layoutRef.current);
+
+    if (losCheckRunIdRef.current !== runId) {
+      return;
+    }
+
+    losCheckCacheRef.current = {
+      key: cacheKey,
+      result,
+    };
+    setLosCheckState({ status: 'done', result });
+  };
+
+  const handleClearLosCheck = () => {
+    losCheckRunIdRef.current += 1;
+    setLosCheckState({ status: 'idle' });
+  };
+
   const handlePiecePointerDown = (
     pieceId: string,
     event: ReactPointerEvent<SVGGElement>,
@@ -975,6 +1065,9 @@ export function LayoutStudio() {
     }
   };
 
+  const losCheckResult = losCheckState.status === 'done' ? losCheckState.result : null;
+  const activeLosSightlines = losCheckResult?.clearSightlines ?? [];
+
   const screenLegend = `
     ${formatTableMeasure(layout.table.widthInches)} × ${formatTableMeasure(layout.table.heightInches)}
   `
@@ -1081,6 +1174,70 @@ export function LayoutStudio() {
           />
 
           <OPRValidationDisplay validation={layout.oprValidation} />
+
+          <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
+            <div className="flex flex-col gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Edge-to-edge LoS check</h2>
+                <p className="mt-1 text-sm text-slate-300">
+                  Check every integer point along the opposite long edges. Any terrain piece counts
+                  as blocking terrain.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleRunLosCheck}
+                  disabled={losCheckState.status === 'loading'}
+                  className="rounded-2xl bg-rose-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {losCheckState.status === 'loading' ? 'Checking line of sight…' : 'Check Line of Sight'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearLosCheck}
+                  disabled={losCheckState.status !== 'done'}
+                  className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/25 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Clear LoS Check
+                </button>
+              </div>
+
+              {losCheckState.status === 'loading' ? (
+                <div
+                  role="status"
+                  className="rounded-2xl border border-cyan-400/25 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100"
+                >
+                  Checking every long-edge path… this can take a moment on dense boards.
+                </div>
+              ) : losCheckResult ? (
+                losCheckResult.allSightlinesBlocked ? (
+                  <div
+                    role="status"
+                    className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100"
+                  >
+                    ✓ No edge-to-edge sightlines across {losCheckResult.totalSightlines.toLocaleString()} lines checked.
+                  </div>
+                ) : (
+                  <div
+                    role="status"
+                    className="rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-100"
+                  >
+                    ✗ Found {losCheckResult.clearSightlineCount.toLocaleString()} clear sightlines. Red lines show every unblocked path.
+                  </div>
+                )
+              ) : losCheckState.status === 'stale' ? (
+                <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                  Terrain changed since the last LoS check. Run it again to refresh the overlay.
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
+                  Runs on demand so the board stays snappy. Results stay cached until the terrain changes.
+                </div>
+              )}
+            </div>
+          </section>
 
           <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
             <div className="flex items-start justify-between gap-4">
@@ -1216,6 +1373,7 @@ export function LayoutStudio() {
               selectedPieceId={selectedPieceId}
               svgRef={svgRef}
               libraryDragActive={libraryDragActive}
+              clearSightlines={activeLosSightlines}
               onCanvasDragOver={handleCanvasDragOver}
               onCanvasDrop={handleCanvasDrop}
               onPiecePointerDown={handlePiecePointerDown}
