@@ -1,4 +1,5 @@
 import type { PlacementConfig } from '../terrain/types';
+import type { OPRValidation } from '../terrain/types';
 
 export type TerrainTraitCategory = 'cover' | 'movement' | 'los';
 
@@ -39,6 +40,7 @@ export interface LayoutState {
   pieces: TerrainPiece[];
   placementConfig?: PlacementConfig;
   customTemplates?: TerrainTemplate[];
+  oprValidation?: OPRValidation;
 }
 
 export interface SavedLayoutRecord {
