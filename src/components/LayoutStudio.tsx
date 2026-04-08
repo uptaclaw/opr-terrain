@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type DragEvent as ReactDragEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import {
@@ -54,6 +55,14 @@ type DragState = {
   startPieceY: number;
 };
 
+type RotationSession = {
+  pieceId: string;
+  originalLayout: LayoutState;
+  startAngle: number;
+  originalRotation: number;
+  latestRotation: number;
+};
+
 type LosCheckState =
   | { status: 'idle' }
   | { status: 'stale' }
@@ -79,6 +88,8 @@ const sortSavedLayouts = (layouts: SavedLayoutRecord[]) =>
 const createId = () => globalThis.crypto?.randomUUID?.() ?? `layout-${Math.random().toString(36).slice(2, 10)}`;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const normalizeRotation = (rotation: number) => ((((rotation + 180) % 360) + 360) % 360) - 180;
 
 const clampPieceToTable = (piece: TerrainPiece, layout: LayoutState) => {
   const width = clamp(piece.width, 2, 24);
@@ -343,6 +354,7 @@ export function LayoutStudio() {
     () => new Map(initialStudioState.presetOverrides),
   );
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
+  const [rotatingPieceId, setRotatingPieceId] = useState<string | null>(null);
   const [activeSavedLayoutId, setActiveSavedLayoutId] = useState<string | null>(null);
   const [layoutNameInput, setLayoutNameInput] = useState('');
   const [statusMessage, setStatusMessage] = useState(
@@ -355,6 +367,7 @@ export function LayoutStudio() {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const cleanSvgRef = useRef<SVGSVGElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
+  const rotationSessionRef = useRef<RotationSession | null>(null);
   const layoutRef = useRef(layout);
   const customPiecesRef = useRef(customPieces);
   const losCheckCacheRef = useRef<{ key: string; result: EdgeToEdgeSightlineResult } | null>(null);
@@ -384,7 +397,7 @@ export function LayoutStudio() {
         return current;
       }
 
-      return layout.pieces[0]?.id ?? null;
+      return null;
     });
   }, [layout.pieces]);
 
@@ -497,6 +510,111 @@ export function LayoutStudio() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!rotatingPieceId) {
+      return undefined;
+    }
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const rotationSession = rotationSessionRef.current;
+
+      if (!rotationSession) {
+        return;
+      }
+
+      const preview = getRotationPreview(rotationSession, event.clientX, event.clientY);
+
+      if (!preview) {
+        return;
+      }
+
+      rotationSession.latestRotation = preview.rotation;
+      setLayout({
+        ...rotationSession.originalLayout,
+        pieces: rotationSession.originalLayout.pieces.map((piece) =>
+          piece.id === rotationSession.pieceId
+            ? clampPieceToTable(
+                {
+                  ...preview.activePiece,
+                  rotation: preview.rotation,
+                },
+                rotationSession.originalLayout,
+              )
+            : piece,
+        ),
+      });
+    };
+
+    const finishRotation = (event: MouseEvent) => {
+      const rotationSession = rotationSessionRef.current;
+
+      if (!rotationSession) {
+        return;
+      }
+
+      const preview = getRotationPreview(rotationSession, event.clientX, event.clientY);
+      const finalRotation = preview?.rotation ?? rotationSession.latestRotation;
+
+      rotationSessionRef.current = null;
+      setRotatingPieceId(null);
+
+      if (finalRotation === rotationSession.originalRotation) {
+        setLayout(rotationSession.originalLayout);
+        return;
+      }
+
+      setLayout({
+        ...rotationSession.originalLayout,
+        pieces: rotationSession.originalLayout.pieces.map((piece) =>
+          piece.id === rotationSession.pieceId
+            ? clampPieceToTable(
+                {
+                  ...(preview?.activePiece ?? piece),
+                  rotation: finalRotation,
+                },
+                rotationSession.originalLayout,
+              )
+            : piece,
+        ),
+      });
+      setStatusMessage('Terrain rotation updated. Save it locally or share the current URL.');
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', finishRotation);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', finishRotation);
+    };
+  }, [rotatingPieceId]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      const rotationSession = rotationSessionRef.current;
+
+      if (rotationSession) {
+        setLayout(rotationSession.originalLayout);
+        rotationSessionRef.current = null;
+        setRotatingPieceId(null);
+      }
+
+      if (selectedPieceId) {
+        setSelectedPieceId(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedPieceId]);
+
   const selectedPiece = useMemo(
     () => layout.pieces.find((piece) => piece.id === selectedPieceId) ?? null,
     [layout.pieces, selectedPieceId],
@@ -532,7 +650,7 @@ export function LayoutStudio() {
   const getTemplateById = (templateId: string) =>
     customPieces.find((piece) => piece.id === templateId) ?? resolvedPresets.find((piece) => piece.id === templateId);
 
-  const getDropPosition = (clientX: number, clientY: number) => {
+  const getTableCoordinates = (clientX: number, clientY: number) => {
     const svgElement = svgRef.current;
 
     if (!svgElement) {
@@ -555,6 +673,25 @@ export function LayoutStudio() {
     return {
       x: sceneX - TABLE_SCENE_MARGIN.left,
       y: layoutRef.current.table.heightInches - (sceneY - TABLE_SCENE_MARGIN.top),
+    };
+  };
+
+  const getRotationPreview = (rotationSession: RotationSession, clientX: number, clientY: number) => {
+    const activePiece = rotationSession.originalLayout.pieces.find((piece) => piece.id === rotationSession.pieceId);
+    const pointer = getTableCoordinates(clientX, clientY);
+
+    if (!activePiece || !pointer) {
+      return null;
+    }
+
+    const deltaX = pointer.x - activePiece.x;
+    const deltaY = pointer.y - activePiece.y;
+    const currentAngle = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
+    const angleDelta = currentAngle - rotationSession.startAngle;
+
+    return {
+      activePiece,
+      rotation: normalizeRotation(rotationSession.originalRotation + angleDelta),
     };
   };
 
@@ -642,7 +779,7 @@ export function LayoutStudio() {
       return;
     }
 
-    const dropPosition = getDropPosition(event.clientX, event.clientY);
+    const dropPosition = getTableCoordinates(event.clientX, event.clientY);
 
     if (!dropPosition) {
       return;
@@ -845,6 +982,45 @@ export function LayoutStudio() {
     setLosCheckState({ status: 'idle' });
   };
 
+  const handleRotateHandleMouseDown = (pieceId: string, event: ReactMouseEvent<SVGGElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    const piece = layoutRef.current.pieces.find((candidate) => candidate.id === pieceId);
+    const pointer = getTableCoordinates(event.clientX, event.clientY);
+
+    if (!piece || !pointer) {
+      return;
+    }
+
+    const deltaX = pointer.x - piece.x;
+    const deltaY = pointer.y - piece.y;
+    const startAngle = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
+
+    rotationSessionRef.current = {
+      pieceId,
+      originalLayout: cloneLayout(layoutRef.current),
+      startAngle,
+      originalRotation: piece.rotation,
+      latestRotation: piece.rotation,
+    };
+    setSelectedPieceId(pieceId);
+    setRotatingPieceId(pieceId);
+  };
+
+  const handleCanvasMouseDown = (event: ReactMouseEvent<SVGSVGElement>) => {
+    const target = event.target;
+
+    if (target instanceof Element) {
+      if (target.closest('[data-testid="layout-terrain-piece"]') || target.closest('[data-testid="rotation-handle"]')) {
+        return;
+      }
+    }
+
+    setSelectedPieceId(null);
+  };
+
   const handlePiecePointerDown = (
     pieceId: string,
     event: ReactPointerEvent<SVGGElement>,
@@ -879,6 +1055,11 @@ export function LayoutStudio() {
       startPieceY: piece.y,
     };
     setSelectedPieceId(pieceId);
+    setStatusMessage(
+      piece.shape === 'ellipse'
+        ? `Selected ${piece.name}. Drag it directly on the table to reposition it.`
+        : `Selected ${piece.name}. Drag it directly on the table or use the on-canvas handle to rotate it.`,
+    );
   };
 
   const handleSaveLayout = () => {
@@ -1351,8 +1532,8 @@ export function LayoutStudio() {
             <div>
               <h2 className="text-lg font-semibold text-white">Interactive table</h2>
               <p className="mt-1 text-sm text-slate-300">
-                Drag terrain directly on the board. Rename pieces, toggle traits, duplicate them,
-                or remove them below the canvas instead of losing table width to a sidebar.
+                Drag terrain directly on the board. Click a piece to select it, reposition it,
+                and rotate non-round terrain with the on-canvas handle.
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-right text-sm text-slate-200">
@@ -1374,147 +1555,19 @@ export function LayoutStudio() {
               svgRef={svgRef}
               libraryDragActive={libraryDragActive}
               clearSightlines={activeLosSightlines}
+              onCanvasMouseDown={handleCanvasMouseDown}
               onCanvasDragOver={handleCanvasDragOver}
               onCanvasDrop={handleCanvasDrop}
               onPiecePointerDown={handlePiecePointerDown}
               onPieceSelect={setSelectedPieceId}
+              onRotateHandleMouseDown={handleRotateHandleMouseDown}
             />
           </div>
 
-          {selectedPiece ? (
-            <section className="mt-6 rounded-3xl border border-white/10 bg-slate-950/40 p-5 shadow-lg shadow-slate-950/20">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div>
-                  <p className="text-sm uppercase tracking-[0.2em] text-cyan-300/80">Selected piece</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-3">
-                    <h3 className="text-lg font-semibold text-white">{selectedPiece.name}</h3>
-                    <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-slate-300">
-                      {selectedPiece.templateId}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-300">
-                    Drag directly on the board to reposition it. Use the rotation slider below to rotate.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={handleDuplicateSelectedPiece}
-                    className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-white/25 hover:text-white"
-                  >
-                    Duplicate piece
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDeleteSelectedPiece}
-                    className="rounded-full border border-rose-400/20 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:border-rose-300/40 hover:bg-rose-500/10"
-                  >
-                    Delete piece
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
-                <label className="flex flex-col gap-2 text-sm text-slate-200">
-                  Piece name
-                  <input
-                    type="text"
-                    value={selectedPiece.name}
-                    onChange={(event) =>
-                      updatePiece(selectedPiece.id, (piece) => ({
-                        ...piece,
-                        name: event.target.value,
-                      }))
-                    }
-                    className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-base text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50"
-                  />
-                </label>
-
-                <label className="flex flex-col gap-2 text-sm text-slate-200">
-                  Rotation (degrees)
-                  <input
-                    type="range"
-                    min="-180"
-                    max="180"
-                    step="1"
-                    value={selectedPiece.rotation}
-                    onChange={(event) =>
-                      updatePiece(selectedPiece.id, (piece) => ({
-                        ...piece,
-                        rotation: Number(event.target.value),
-                      }))
-                    }
-                    className="rounded-2xl"
-                  />
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-400">-180°</span>
-                    <span className="font-semibold text-white">{selectedPiece.rotation}°</span>
-                    <span className="text-xs text-slate-400">180°</span>
-                  </div>
-                </label>
-              </div>
-
-              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-200 sm:grid-cols-4">
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-3">
-                    <dt className="text-xs uppercase tracking-wide text-slate-400">Position X</dt>
-                    <dd className="mt-1 font-semibold text-white">{formatInches(selectedPiece.x)}</dd>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-3">
-                    <dt className="text-xs uppercase tracking-wide text-slate-400">Position Y</dt>
-                    <dd className="mt-1 font-semibold text-white">{formatInches(selectedPiece.y)}</dd>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-3">
-                    <dt className="text-xs uppercase tracking-wide text-slate-400">Footprint</dt>
-                    <dd className="mt-1 font-semibold text-white">
-                      {formatInches(selectedPiece.width)} × {formatInches(selectedPiece.height)}
-                    </dd>
-                  </div>
-                </dl>
-
-              <div className="mt-5">
-                <h3 className="text-sm font-semibold text-white">Active terrain traits</h3>
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  {selectedPiece.traits.map((trait) => (
-                    <label
-                      key={trait.id}
-                      className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-100"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={trait.active}
-                        onChange={(event) =>
-                          updatePiece(selectedPiece.id, (piece) => ({
-                            ...piece,
-                            traits: piece.traits.map((candidate) =>
-                              candidate.id === trait.id
-                                ? {
-                                    ...candidate,
-                                    active: event.target.checked,
-                                  }
-                                : candidate,
-                            ),
-                          }))
-                        }
-                        className="mt-0.5 h-4 w-4 rounded border-white/10 bg-slate-900 text-cyan-400"
-                      />
-                      <span>
-                        <span className="block font-medium text-white">{trait.label}</span>
-                        <span className="mt-1 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset text-slate-300 ring-white/10">
-                          {categoryLabels[trait.category]}
-                        </span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </section>
-          ) : (
-            <div className="mt-6 rounded-3xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-400">
-              Select a terrain piece on the table to rename it, toggle traits, duplicate it, or
-              remove it.
-            </div>
-          )}
+          <div className="mt-6 rounded-3xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-400">
+            Click a terrain piece to highlight it. Drag selected terrain to reposition it, and use
+            the on-canvas rotation handle for non-round pieces.
+          </div>
 
           <div className="mt-6">
             <TerrainSummaryLegend pieces={layout.pieces} />
