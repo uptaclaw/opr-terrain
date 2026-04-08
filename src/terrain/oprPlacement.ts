@@ -52,6 +52,22 @@ export const OPR_DEFAULT_GUIDELINES: OPRGuidelines = {
 };
 
 /**
+ * Calculate actual shape area based on terrain piece shape
+ */
+const getShapeArea = (piece: TerrainPiece): number => {
+  switch (piece.shape.kind) {
+    case 'circle':
+      return Math.PI * piece.shape.radius * piece.shape.radius;
+    case 'rectangle':
+      return piece.shape.width * piece.shape.height;
+    case 'polygon':
+      // For polygons, use collision radius as approximation
+      // Could improve with proper polygon area calculation if needed
+      return Math.PI * piece.collisionRadius * piece.collisionRadius;
+  }
+};
+
+/**
  * Calculate table coverage percentage based on terrain piece areas
  */
 export const calculateCoveragePercent = (
@@ -61,9 +77,9 @@ export const calculateCoveragePercent = (
 ): number => {
   const tableArea = tableWidthInches * tableHeightInches;
   
-  // Estimate area based on collision radius (approximation)
+  // Calculate actual area based on shape
   const totalTerrainArea = pieces.reduce((sum, piece) => {
-    return sum + Math.PI * piece.collisionRadius * piece.collisionRadius;
+    return sum + getShapeArea(piece);
   }, 0);
 
   return (totalTerrainArea / tableArea) * 100;
@@ -323,60 +339,87 @@ export const buildOPRTerrainSelection = (
     return { templateId: template.id, shapeKind };
   };
   
+  // Helper to recount traits (handles multi-trait pieces)
+  const recountTraits = () => {
+    const losBlocking = selections.filter(s => {
+      const t = getTemplateById(s.templateId);
+      return t.traits.includes('LoS Blocking');
+    }).length;
+    
+    const cover = selections.filter(s => {
+      const t = getTemplateById(s.templateId);
+      return t.traits.includes('Soft Cover') || t.traits.includes('Hard Cover');
+    }).length;
+    
+    const difficult = selections.filter(s => {
+      const t = getTemplateById(s.templateId);
+      return t.traits.includes('Difficult');
+    }).length;
+    
+    const dangerous = selections.filter(s => {
+      const t = getTemplateById(s.templateId);
+      return t.traits.includes('Dangerous');
+    }).length;
+    
+    return { losBlocking, cover, difficult, dangerous };
+  };
+  
   // Add exactly 2 dangerous pieces
   for (let i = 0; i < dangerousCount && selections.length < targetCount; i++) {
     selections.push(pickTemplate(dangerousTemplates));
   }
   
-  // Track what we need
-  let losBlockingAdded = selections.filter(s => {
-    const t = getTemplateById(s.templateId);
-    return t.traits.includes('LoS Blocking');
-  }).length;
-  
-  let coverAdded = selections.filter(s => {
-    const t = getTemplateById(s.templateId);
-    return t.traits.includes('Soft Cover') || t.traits.includes('Hard Cover');
-  }).length;
-  
-  let difficultAdded = selections.filter(s => {
-    const t = getTemplateById(s.templateId);
-    return t.traits.includes('Difficult');
-  }).length;
-  
   // Prioritize LoS blocking (50% requirement)
-  while (losBlockingAdded < minLosBlocking && selections.length < targetCount) {
-    selections.push(pickTemplate(losBlockingTemplates));
-    losBlockingAdded++;
-  }
-  
-  // Add cover pieces (33% requirement)
-  while (coverAdded < minCover && selections.length < targetCount) {
-    const template = coverTemplates[Math.floor(random() * coverTemplates.length)]!;
-    const shapeKind = template.shapeKinds[Math.floor(random() * template.shapeKinds.length)]!;
-    selections.push({ templateId: template.id, shapeKind });
-    coverAdded++;
-  }
-  
-  // Add difficult terrain (33% requirement)
-  while (difficultAdded < minDifficult && selections.length < targetCount) {
-    const template = difficultTemplates[Math.floor(random() * difficultTemplates.length)]!;
-    const shapeKind = template.shapeKinds[Math.floor(random() * template.shapeKinds.length)]!;
-    selections.push({ templateId: template.id, shapeKind });
-    difficultAdded++;
-  }
-  
-  // Fill remaining with random weighted selection
   while (selections.length < targetCount) {
-    const totalWeight = terrainCatalog.reduce((sum, t) => sum + t.weight, 0);
-    let roll = random() * totalWeight;
+    const counts = recountTraits();
     
-    for (const template of terrainCatalog) {
-      roll -= template.weight;
-      if (roll <= 0) {
-        const shapeKind = template.shapeKinds[Math.floor(random() * template.shapeKinds.length)]!;
-        selections.push({ templateId: template.id, shapeKind });
-        break;
+    // Never exceed 2 dangerous pieces
+    const nonDangerousTemplates = terrainCatalog.filter(t => !t.traits.includes('Dangerous'));
+    
+    if (counts.losBlocking < minLosBlocking && losBlockingTemplates.length > 0) {
+      // Pick from LoS blocking that aren't dangerous, or already added dangerous
+      const safeLosBlocking = losBlockingTemplates.filter(t => 
+        !t.traits.includes('Dangerous') || counts.dangerous < dangerousCount
+      );
+      if (safeLosBlocking.length > 0) {
+        selections.push(pickTemplate(safeLosBlocking));
+      } else {
+        selections.push(pickTemplate(losBlockingTemplates));
+      }
+    } else if (counts.cover < minCover && coverTemplates.length > 0) {
+      const safeCover = coverTemplates.filter(t => 
+        !t.traits.includes('Dangerous') || counts.dangerous < dangerousCount
+      );
+      if (safeCover.length > 0) {
+        selections.push(pickTemplate(safeCover));
+      } else {
+        selections.push(pickTemplate(coverTemplates));
+      }
+    } else if (counts.difficult < minDifficult && difficultTemplates.length > 0) {
+      const safeDifficult = difficultTemplates.filter(t => 
+        !t.traits.includes('Dangerous') || counts.dangerous < dangerousCount
+      );
+      if (safeDifficult.length > 0) {
+        selections.push(pickTemplate(safeDifficult));
+      } else {
+        selections.push(pickTemplate(difficultTemplates));
+      }
+    } else {
+      // Fill remaining with random weighted selection (exclude dangerous if we have 2)
+      const eligibleTemplates = counts.dangerous >= dangerousCount 
+        ? nonDangerousTemplates 
+        : terrainCatalog;
+      
+      const totalWeight = eligibleTemplates.reduce((sum, t) => sum + t.weight, 0);
+      let roll = random() * totalWeight;
+      
+      for (const template of eligibleTemplates) {
+        roll -= template.weight;
+        if (roll <= 0) {
+          const shapeKind = template.shapeKinds[Math.floor(random() * template.shapeKinds.length)]!;
+          selections.push({ templateId: template.id, shapeKind });
+          break;
+        }
       }
     }
   }

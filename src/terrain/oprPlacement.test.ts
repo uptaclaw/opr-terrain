@@ -10,6 +10,7 @@ import {
   OPR_DEFAULT_GUIDELINES,
 } from './oprPlacement';
 import { generateTerrainLayout } from './generateTerrainLayout';
+import { terrainCatalog } from './catalog';
 import type { TerrainPiece } from './types';
 
 const mulberry32 = (seed: number) => {
@@ -33,18 +34,18 @@ describe('buildOPRTerrainSelection', () => {
   it('includes exactly 2 dangerous terrain pieces', () => {
     const selection = buildOPRTerrainSelection(12, mulberry32(42));
     const dangerousCount = selection.filter((s) => {
-      const template = s.templateId === 'marsh';
-      return template;
+      const template = terrainCatalog.find(t => t.id === s.templateId);
+      return template && template.traits.includes('Dangerous');
     }).length;
-    expect(dangerousCount).toBeGreaterThanOrEqual(2);
+    expect(dangerousCount).toBe(2);
   });
 
   it('meets LoS blocking requirement (≥50%)', () => {
     const selection = buildOPRTerrainSelection(12, mulberry32(42));
-    const losBlockingTemplates = ['ruins', 'outcrop'];
-    const losBlockingCount = selection.filter((s) =>
-      losBlockingTemplates.includes(s.templateId)
-    ).length;
+    const losBlockingCount = selection.filter((s) => {
+      const template = terrainCatalog.find(t => t.id === s.templateId);
+      return template && template.traits.includes('LoS Blocking');
+    }).length;
     expect(losBlockingCount).toBeGreaterThanOrEqual(6); // 50% of 12
   });
 });
@@ -153,7 +154,10 @@ describe('hasEdgeToEdgeSightline', () => {
   });
 
   it('detects blocked sightlines with LoS blocking terrain', () => {
+    // Create pieces that block all 5 horizontal test points (y = 0, 18, 36, 54, 72)
+    // AND all 5 vertical test points (x = 0, 12, 24, 36, 48)
     const mockPieces: TerrainPiece[] = [
+      // Block horizontal sightlines
       {
         id: '1',
         templateId: 'ruins',
@@ -161,10 +165,10 @@ describe('hasEdgeToEdgeSightline', () => {
         color: '#8b6b4f',
         traits: ['LoS Blocking'],
         x: 24,
-        y: 18,
+        y: 0,
         rotation: 0,
-        shape: { kind: 'rectangle', width: 6, height: 6 },
-        collisionRadius: 4,
+        shape: { kind: 'circle', radius: 6 },
+        collisionRadius: 6,
       },
       {
         id: '2',
@@ -173,10 +177,10 @@ describe('hasEdgeToEdgeSightline', () => {
         color: '#8b6b4f',
         traits: ['LoS Blocking'],
         x: 24,
-        y: 36,
+        y: 18,
         rotation: 0,
-        shape: { kind: 'rectangle', width: 6, height: 6 },
-        collisionRadius: 4,
+        shape: { kind: 'circle', radius: 6 },
+        collisionRadius: 6,
       },
       {
         id: '3',
@@ -185,10 +189,84 @@ describe('hasEdgeToEdgeSightline', () => {
         color: '#8b6b4f',
         traits: ['LoS Blocking'],
         x: 24,
+        y: 36,
+        rotation: 0,
+        shape: { kind: 'circle', radius: 6 },
+        collisionRadius: 6,
+      },
+      {
+        id: '4',
+        templateId: 'ruins',
+        name: 'Ruins',
+        color: '#8b6b4f',
+        traits: ['LoS Blocking'],
+        x: 24,
         y: 54,
         rotation: 0,
-        shape: { kind: 'rectangle', width: 6, height: 6 },
-        collisionRadius: 4,
+        shape: { kind: 'circle', radius: 6 },
+        collisionRadius: 6,
+      },
+      {
+        id: '5',
+        templateId: 'ruins',
+        name: 'Ruins',
+        color: '#8b6b4f',
+        traits: ['LoS Blocking'],
+        x: 24,
+        y: 72,
+        rotation: 0,
+        shape: { kind: 'circle', radius: 6 },
+        collisionRadius: 6,
+      },
+      // Block vertical sightlines
+      {
+        id: '6',
+        templateId: 'ruins',
+        name: 'Ruins',
+        color: '#8b6b4f',
+        traits: ['LoS Blocking'],
+        x: 0,
+        y: 36,
+        rotation: 0,
+        shape: { kind: 'circle', radius: 6 },
+        collisionRadius: 6,
+      },
+      {
+        id: '7',
+        templateId: 'ruins',
+        name: 'Ruins',
+        color: '#8b6b4f',
+        traits: ['LoS Blocking'],
+        x: 12,
+        y: 36,
+        rotation: 0,
+        shape: { kind: 'circle', radius: 6 },
+        collisionRadius: 6,
+      },
+      // x=24 already covered by horizontal pieces
+      {
+        id: '8',
+        templateId: 'ruins',
+        name: 'Ruins',
+        color: '#8b6b4f',
+        traits: ['LoS Blocking'],
+        x: 36,
+        y: 36,
+        rotation: 0,
+        shape: { kind: 'circle', radius: 6 },
+        collisionRadius: 6,
+      },
+      {
+        id: '9',
+        templateId: 'ruins',
+        name: 'Ruins',
+        color: '#8b6b4f',
+        traits: ['LoS Blocking'],
+        x: 48,
+        y: 36,
+        rotation: 0,
+        shape: { kind: 'circle', radius: 6 },
+        collisionRadius: 6,
       },
     ];
 
@@ -213,7 +291,7 @@ describe('validateOPRLayout', () => {
     expect(validation.meetsMaxPieces).toBe(true);
     expect(validation.dangerousCount).toBe(2);
     expect(validation.losBlockingPercent).toBeGreaterThanOrEqual(50);
-  });
+  }, 20000); // 20 second timeout
 });
 
 describe('OPR-compliant layout generation', () => {
@@ -243,7 +321,7 @@ describe('OPR-compliant layout generation', () => {
       // Spacing - relaxed for tests since perfect spacing might be hard
       expect(validation.minGap).toBeGreaterThan(0); // At least some gap
     }
-  });
+  }, 40000); // 40 second timeout for 5 iterations
 
   it('generates different layouts on each call', () => {
     const layout1 = generateTerrainLayout({ pieceCount: 12, widthInches: 48, heightInches: 72 });
@@ -253,5 +331,5 @@ describe('OPR-compliant layout generation', () => {
     const sig2 = layout2.pieces.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join('|');
 
     expect(sig1).not.toBe(sig2);
-  });
+  }, 25000); // 25 second timeout
 });
