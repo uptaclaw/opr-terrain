@@ -39,6 +39,7 @@ import { TERRAIN_LIBRARY_MIME_TYPE, TerrainPaletteTable } from './TerrainPalette
 import type { PieceFormData } from './TerrainPieceModal';
 import { AutoPlacementGenerator } from './AutoPlacementGenerator';
 import { TerrainSummaryLegend } from './TerrainSummaryLegend';
+import { OPRValidationDashboard } from './OPRValidationDashboard';
 import type { TerrainLayout } from '../terrain/types';
 
 type DragState = {
@@ -1353,6 +1354,14 @@ export function LayoutStudio() {
               remove it.
             </div>
           )}
+
+          <div className="mt-6">
+            <OPRValidationDashboard
+              pieces={layout.pieces}
+              tableWidthInches={layout.table.widthInches}
+              tableHeightInches={layout.table.heightInches}
+            />
+          </div>
 
           <div className="mt-6">
             <TerrainSummaryLegend pieces={layout.pieces} />
