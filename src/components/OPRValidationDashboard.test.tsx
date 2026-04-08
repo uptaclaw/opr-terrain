@@ -46,13 +46,14 @@ describe('OPRValidationDashboard', () => {
     expect(screen.getByTestId('opr-validation-dashboard')).toBeInTheDocument();
     expect(screen.getByText('OPR Validation Dashboard')).toBeInTheDocument();
     
-    // Check all metric sections are rendered
+    // Check all 7 metric sections are rendered
     expect(screen.getByTestId('validation-metric-quantity')).toBeInTheDocument();
     expect(screen.getByTestId('validation-metric-coverage')).toBeInTheDocument();
     expect(screen.getByTestId('validation-metric-los-blocking')).toBeInTheDocument();
     expect(screen.getByTestId('validation-metric-cover')).toBeInTheDocument();
     expect(screen.getByTestId('validation-metric-difficult')).toBeInTheDocument();
     expect(screen.getByTestId('validation-metric-dangerous')).toBeInTheDocument();
+    expect(screen.getByTestId('validation-metric-spacing')).toBeInTheDocument();
   });
 
   it('displays good status when most checks pass', () => {
@@ -132,7 +133,7 @@ describe('OPRValidationDashboard', () => {
     render(<OPRValidationDashboard pieces={[]} tableWidthInches={48} tableHeightInches={48} />);
 
     expect(screen.getByTestId('opr-validation-dashboard')).toBeInTheDocument();
-    expect(screen.getByText('0/6 passed')).toBeInTheDocument();
+    expect(screen.getByText('0/7 passed')).toBeInTheDocument();
   });
 
   it('displays OPR guidelines reference', () => {
