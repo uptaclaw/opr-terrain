@@ -180,13 +180,14 @@ describe('LayoutStudio', () => {
   });
 
   it('removes the selected piece panel and shows an on-canvas rotation handle after selection', () => {
-    const { container } = render(<LayoutStudio />);
+    render(<LayoutStudio />);
 
     expect(screen.queryByText(/^piece inspector$/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^selected piece$/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId('rotation-handle')).not.toBeInTheDocument();
 
-    const centralRuins = container.querySelector(
+    const [interactiveCanvas] = screen.getAllByTestId('table-canvas-svg');
+    const centralRuins = interactiveCanvas.querySelector(
       '[data-testid="layout-terrain-piece"][data-piece-name="Central Ruins"]',
     ) as SVGElement;
 
@@ -194,6 +195,49 @@ describe('LayoutStudio', () => {
 
     expect(screen.getByTestId('rotation-handle')).toBeInTheDocument();
     expect(screen.queryByText(/^selected piece$/i)).not.toBeInTheDocument();
+  });
+
+  it('changes the selected piece rotation when the on-canvas handle is dragged', async () => {
+    render(<LayoutStudio />);
+
+    const [interactiveCanvas] = screen.getAllByTestId('table-canvas-svg');
+    const centralRuins = interactiveCanvas.querySelector(
+      '[data-testid="layout-terrain-piece"][data-piece-name="Central Ruins"]',
+    ) as SVGElement;
+    const initialRotation = Number(centralRuins.getAttribute('data-piece-rotation'));
+    const defaultLayout = createDefaultLayout();
+    const selectedPiece = defaultLayout.pieces.find((piece) => piece.name === 'Central Ruins');
+
+    expect(selectedPiece).toBeDefined();
+
+    fireEvent.click(centralRuins);
+
+    const handle = screen.getByTestId('rotation-handle');
+    const handleOffset = Math.max(selectedPiece!.width, selectedPiece!.height) / 2 + 2.4;
+    const startPoint = clientPoint(
+      selectedPiece!.x,
+      defaultLayout.table.heightInches - selectedPiece!.y - handleOffset,
+    );
+    const endPoint = clientPoint(selectedPiece!.x + handleOffset, defaultLayout.table.heightInches - selectedPiece!.y);
+
+    fireEvent.mouseDown(handle, {
+      button: 0,
+      ...startPoint,
+    });
+    fireEvent.mouseMove(window, endPoint);
+
+    await waitFor(() => {
+      const rotatedPiece = interactiveCanvas.querySelector(
+        '[data-testid="layout-terrain-piece"][data-piece-name="Central Ruins"]',
+      ) as SVGElement;
+      const rotatedRotation = Number(rotatedPiece.getAttribute('data-piece-rotation'));
+
+      expect(Math.abs(rotatedRotation - initialRotation)).toBeGreaterThan(5);
+    });
+
+    fireEvent.mouseUp(window, endPoint);
+
+    expect(screen.getByText(/terrain rotation updated/i)).toBeInTheDocument();
   });
 
   it('renders the terrain summary legend and updates it when terrain is added to the layout', () => {
