@@ -21,6 +21,15 @@ describe('AutoPlacementGenerator', () => {
     // Default density is "Balanced"
     const balancedButton = screen.getByRole('button', { name: /Balanced/i });
     expect(balancedButton).toHaveClass('border-cyan-400/60');
+
+    // Default piece range follows OPR guidance for a 4'x6' table
+    const pieceCountSlider = screen.getByRole('slider') as HTMLInputElement;
+    expect(pieceCountSlider.min).toBe('10');
+    expect(pieceCountSlider.max).toBe('15');
+    expect(Number(pieceCountSlider.value)).toBeGreaterThanOrEqual(10);
+    expect(Number(pieceCountSlider.value)).toBeLessThanOrEqual(15);
+
+    expect(screen.getByRole('button', { name: /re-generate terrain/i })).toBeInTheDocument();
   });
 
   it('restores UI state from initialConfig prop', () => {

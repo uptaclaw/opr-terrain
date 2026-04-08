@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { generateTerrainLayout } from '../terrain/generateTerrainLayout';
 import { getStrategyDescription } from '../terrain/placementStrategies';
 import type {
@@ -31,6 +31,42 @@ const DENSITY_OPTIONS: Array<{ value: PlacementDensity; label: string }> = [
   { value: 'dense', label: 'Dense' },
 ];
 
+const OPR_REFERENCE_TABLE_AREA = 48 * 72;
+const OPR_REFERENCE_MIN_PIECES = 10;
+const OPR_REFERENCE_MAX_PIECES = 15;
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const scalePieceCountForTable = (baseCount: number, widthInches: number, heightInches: number) => {
+  const tableScale = (widthInches * heightInches) / OPR_REFERENCE_TABLE_AREA;
+  return Math.max(1, Math.round(baseCount * tableScale));
+};
+
+const getRecommendedPieceRange = (widthInches: number, heightInches: number) => {
+  const min = scalePieceCountForTable(OPR_REFERENCE_MIN_PIECES, widthInches, heightInches);
+  const max = Math.max(min, scalePieceCountForTable(OPR_REFERENCE_MAX_PIECES, widthInches, heightInches));
+
+  return { min, max };
+};
+
+const getDefaultTargetPieceCount = (widthInches: number, heightInches: number) => {
+  const { min, max } = getRecommendedPieceRange(widthInches, heightInches);
+  return Math.round((min + max) / 2);
+};
+
+const createSeededRandom = (seed: number) => {
+  let state = seed >>> 0;
+
+  return () => {
+    state += 0x6d2b79f5;
+    let result = Math.imul(state ^ (state >>> 15), state | 1);
+    result ^= result + Math.imul(result ^ (result >>> 7), result | 61);
+    return ((result ^ (result >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+const createRegenerationSeed = () => ((Date.now() >>> 0) + Math.floor(Math.random() * 0xffffffff)) >>> 0;
+
 export function AutoPlacementGenerator({
   widthInches,
   heightInches,
@@ -45,7 +81,13 @@ export function AutoPlacementGenerator({
     deploymentZoneSafety: true,
     forceSymmetry: false,
   });
-  const [targetPieceCount, setTargetPieceCount] = useState<number>(16);
+  const recommendedPieceRange = useMemo(
+    () => getRecommendedPieceRange(widthInches, heightInches),
+    [widthInches, heightInches],
+  );
+  const [targetPieceCount, setTargetPieceCount] = useState<number>(() =>
+    getDefaultTargetPieceCount(widthInches, heightInches),
+  );
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,19 +98,23 @@ export function AutoPlacementGenerator({
     }
   }, [initialConfig]);
 
+  useEffect(() => {
+    setTargetPieceCount((current) => clamp(current, recommendedPieceRange.min, recommendedPieceRange.max));
+  }, [recommendedPieceRange]);
+
   const handleGenerate = () => {
     setIsGenerating(true);
     setError(null);
 
     try {
-      // Generate with proper random seeding using Date.now()
+      const random = createSeededRandom(createRegenerationSeed());
       const layout = generateTerrainLayout({
         widthInches,
         heightInches,
         deploymentDepthInches,
         pieceCount: targetPieceCount,
         placementConfig,
-        // Don't provide a random function - let it use Date.now() for proper seeding
+        random,
       });
 
       onLayoutGenerated(layout);
@@ -147,16 +193,16 @@ export function AutoPlacementGenerator({
           </label>
           <input
             type="range"
-            min={10}
-            max={20}
+            min={recommendedPieceRange.min}
+            max={recommendedPieceRange.max}
             step={1}
             value={targetPieceCount}
             onChange={(e) => setTargetPieceCount(Number(e.target.value))}
             className="w-full"
           />
           <div className="flex justify-between text-xs text-slate-400">
-            <span>10 pieces</span>
-            <span>20 pieces</span>
+            <span>{recommendedPieceRange.min} pieces</span>
+            <span>{recommendedPieceRange.max} pieces</span>
           </div>
         </div>
 
@@ -238,9 +284,9 @@ export function AutoPlacementGenerator({
             onClick={handleGenerate}
             disabled={isGenerating}
             className="rounded-2xl border border-cyan-400/40 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-            title="Re-generate with same settings"
+            title="Re-generate Terrain"
           >
-            🔄
+            Re-generate Terrain
           </button>
         </div>
 
