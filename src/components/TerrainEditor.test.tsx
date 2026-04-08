@@ -205,7 +205,6 @@ describe('TerrainEditor', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
 
     expect(screen.queryByTestId('rotation-handle')).not.toBeInTheDocument();
-    expect(screen.getByText('None')).toBeInTheDocument();
   });
 
   it('rotates the selected piece from the rotation handle and commits the final mouseup angle', () => {

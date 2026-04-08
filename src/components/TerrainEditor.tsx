@@ -753,72 +753,16 @@ export function TerrainEditor({
               />
             </label>
 
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-200">
-              <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-2">
-                <dt className="text-xs uppercase tracking-wide text-slate-400">Collisions</dt>
-                <dd className="mt-1 font-semibold text-emerald-300">
-                  {analysis.overlaps.length === 0 ? 'Blocked cleanly' : `${analysis.overlaps.length} overlap(s)`}
-                </dd>
+            <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-2">
+              <div className="text-xs uppercase tracking-wide text-slate-400">Collisions</div>
+              <div className="mt-1 font-semibold text-emerald-300">
+                {analysis.overlaps.length === 0 ? 'Blocked cleanly' : `${analysis.overlaps.length} overlap(s)`}
               </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-2">
-                <dt className="text-xs uppercase tracking-wide text-slate-400">Selection</dt>
-                <dd className="mt-1 font-semibold text-white">
-                  {selectedPiece ? selectedPiece.name : 'None'}
-                </dd>
-              </div>
-            </dl>
+            </div>
 
-            {selectedPiece ? (
-              <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-950/10 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-semibold text-white">{selectedPiece.name}</h3>
-                    <p className="mt-1 text-xs text-slate-400">
-                      {selectedPiece.shape.kind} • x {selectedPiece.x.toFixed(1)} • y {selectedPiece.y.toFixed(1)}
-                    </p>
-                  </div>
-                  <div
-                    className="h-8 w-8 rounded-lg border border-white/15"
-                    style={{ backgroundColor: selectedPiece.color }}
-                    aria-hidden="true"
-                  />
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-200">
-                  {selectedPiece.traits.map((trait) => (
-                    <span
-                      key={trait}
-                      className="rounded-full border border-white/10 bg-slate-900/80 px-2.5 py-1"
-                    >
-                      {trait}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleRotatePiece(selectedPiece.id)}
-                    disabled={selectedPiece.shape.kind === 'circle'}
-                    className="inline-flex items-center justify-center rounded-full border border-white/10 bg-slate-950/70 px-4 py-2 text-sm font-semibold text-white transition hover:border-cyan-400/50 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Rotate 90°
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeletePiece(selectedPiece.id)}
-                    className="inline-flex items-center justify-center rounded-full border border-rose-400/30 bg-rose-950/30 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-300/60 hover:text-white"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-slate-400">
-                Click any piece to select it. Right-click for the quick menu, or use Delete to remove
-                the current selection.
-              </p>
-            )}
+            <p className="mt-4 text-sm text-slate-400">
+              Click any piece to select it and rotate with the on-canvas handle. Right-click for the quick menu, or use Delete to remove the selection.
+            </p>
           </section>
 
           <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-5">
