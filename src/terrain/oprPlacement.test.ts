@@ -154,18 +154,18 @@ describe('hasEdgeToEdgeSightline', () => {
   });
 
   it('detects blocked sightlines with LoS blocking terrain', () => {
-    // Create pieces that block all 5 horizontal test points (y = 0, 18, 36, 54, 72)
-    // AND all 5 vertical test points (x = 0, 12, 24, 36, 48)
+    // The validator samples the midpoint of each 12" x 18" play lane on a 4'x6' table:
+    // rows at y = 9, 27, 45, 63 and columns at x = 6, 18, 30, 42.
+    // Four blockers on the diagonal are enough to interrupt every sampled lane.
     const mockPieces: TerrainPiece[] = [
-      // Block horizontal sightlines
       {
         id: '1',
         templateId: 'ruins',
         name: 'Ruins',
         color: '#8b6b4f',
         traits: ['LoS Blocking'],
-        x: 24,
-        y: 0,
+        x: 6,
+        y: 9,
         rotation: 0,
         shape: { kind: 'circle', radius: 6 },
         collisionRadius: 6,
@@ -176,8 +176,8 @@ describe('hasEdgeToEdgeSightline', () => {
         name: 'Ruins',
         color: '#8b6b4f',
         traits: ['LoS Blocking'],
-        x: 24,
-        y: 18,
+        x: 18,
+        y: 27,
         rotation: 0,
         shape: { kind: 'circle', radius: 6 },
         collisionRadius: 6,
@@ -188,8 +188,8 @@ describe('hasEdgeToEdgeSightline', () => {
         name: 'Ruins',
         color: '#8b6b4f',
         traits: ['LoS Blocking'],
-        x: 24,
-        y: 36,
+        x: 30,
+        y: 45,
         rotation: 0,
         shape: { kind: 'circle', radius: 6 },
         collisionRadius: 6,
@@ -200,70 +200,8 @@ describe('hasEdgeToEdgeSightline', () => {
         name: 'Ruins',
         color: '#8b6b4f',
         traits: ['LoS Blocking'],
-        x: 24,
-        y: 54,
-        rotation: 0,
-        shape: { kind: 'circle', radius: 6 },
-        collisionRadius: 6,
-      },
-      {
-        id: '5',
-        templateId: 'ruins',
-        name: 'Ruins',
-        color: '#8b6b4f',
-        traits: ['LoS Blocking'],
-        x: 24,
-        y: 72,
-        rotation: 0,
-        shape: { kind: 'circle', radius: 6 },
-        collisionRadius: 6,
-      },
-      // Block vertical sightlines
-      {
-        id: '6',
-        templateId: 'ruins',
-        name: 'Ruins',
-        color: '#8b6b4f',
-        traits: ['LoS Blocking'],
-        x: 0,
-        y: 36,
-        rotation: 0,
-        shape: { kind: 'circle', radius: 6 },
-        collisionRadius: 6,
-      },
-      {
-        id: '7',
-        templateId: 'ruins',
-        name: 'Ruins',
-        color: '#8b6b4f',
-        traits: ['LoS Blocking'],
-        x: 12,
-        y: 36,
-        rotation: 0,
-        shape: { kind: 'circle', radius: 6 },
-        collisionRadius: 6,
-      },
-      // x=24 already covered by horizontal pieces
-      {
-        id: '8',
-        templateId: 'ruins',
-        name: 'Ruins',
-        color: '#8b6b4f',
-        traits: ['LoS Blocking'],
-        x: 36,
-        y: 36,
-        rotation: 0,
-        shape: { kind: 'circle', radius: 6 },
-        collisionRadius: 6,
-      },
-      {
-        id: '9',
-        templateId: 'ruins',
-        name: 'Ruins',
-        color: '#8b6b4f',
-        traits: ['LoS Blocking'],
-        x: 48,
-        y: 36,
+        x: 42,
+        y: 63,
         rotation: 0,
         shape: { kind: 'circle', radius: 6 },
         collisionRadius: 6,
@@ -289,9 +227,16 @@ describe('validateOPRLayout', () => {
     expect(validation.pieceCount).toBe(12);
     expect(validation.meetsMinPieces).toBe(true);
     expect(validation.meetsMaxPieces).toBe(true);
-    expect(validation.dangerousCount).toBe(2);
-    expect(validation.losBlockingPercent).toBeGreaterThanOrEqual(50);
-  }, 20000); // 20 second timeout
+    expect(validation.meetsCoverage).toBe(true);
+    expect(validation.meetsLosBlocking).toBe(true);
+    expect(validation.meetsCover).toBe(true);
+    expect(validation.meetsDifficult).toBe(true);
+    expect(validation.meetsDangerous).toBe(true);
+    expect(validation.meetsMinGap).toBe(true);
+    expect(validation.meetsMaxGap).toBe(true);
+    expect(validation.edgeToEdgeClear).toBe(true);
+    expect(validation.allValid).toBe(true);
+  }, 20000);
 });
 
 describe('OPR-compliant layout generation', () => {
@@ -302,34 +247,37 @@ describe('OPR-compliant layout generation', () => {
         random: mulberry32(seed),
         widthInches: 48,
         heightInches: 72,
-        collisionBufferInches: 3.0, // OPR 3" minimum gap
+        collisionBufferInches: 3.0,
       });
 
       expect(layout.oprValidation).toBeDefined();
       const validation = layout.oprValidation!;
 
-      // Piece count
+      expect(validation.allValid).toBe(true);
       expect(validation.pieceCount).toBeGreaterThanOrEqual(OPR_DEFAULT_GUIDELINES.minPieces);
       expect(validation.pieceCount).toBeLessThanOrEqual(OPR_DEFAULT_GUIDELINES.maxPieces);
-
-      // Dangerous terrain
-      expect(validation.dangerousCount).toBe(OPR_DEFAULT_GUIDELINES.dangerousPieces);
-
-      // LoS blocking
+      expect(validation.coveragePercent).toBeGreaterThanOrEqual(OPR_DEFAULT_GUIDELINES.minCoveragePercent);
       expect(validation.losBlockingPercent).toBeGreaterThanOrEqual(OPR_DEFAULT_GUIDELINES.minLosBlockingPercent);
-
-      // Spacing - relaxed for tests since perfect spacing might be hard
-      expect(validation.minGap).toBeGreaterThan(0); // At least some gap
+      expect(validation.coverPercent).toBeGreaterThanOrEqual(OPR_DEFAULT_GUIDELINES.minCoverPercent);
+      expect(validation.difficultPercent).toBeGreaterThanOrEqual(OPR_DEFAULT_GUIDELINES.minDifficultPercent);
+      expect(validation.dangerousCount).toBe(OPR_DEFAULT_GUIDELINES.dangerousPieces);
+      expect(validation.minGap).toBeGreaterThanOrEqual(OPR_DEFAULT_GUIDELINES.minGapInches - 0.01);
+      expect(validation.maxGap).toBeLessThanOrEqual(OPR_DEFAULT_GUIDELINES.maxGapInches);
+      expect(validation.edgeToEdgeClear).toBe(true);
     }
-  }, 40000); // 40 second timeout for 5 iterations
+  }, 40000);
 
   it('generates different layouts on each call', () => {
     const layout1 = generateTerrainLayout({ pieceCount: 12, widthInches: 48, heightInches: 72 });
     const layout2 = generateTerrainLayout({ pieceCount: 12, widthInches: 48, heightInches: 72 });
 
-    const sig1 = layout1.pieces.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join('|');
-    const sig2 = layout2.pieces.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join('|');
+    const sig1 = layout1.pieces
+      .map((piece) => `${piece.templateId}:${piece.x.toFixed(1)},${piece.y.toFixed(1)}`)
+      .join('|');
+    const sig2 = layout2.pieces
+      .map((piece) => `${piece.templateId}:${piece.x.toFixed(1)},${piece.y.toFixed(1)}`)
+      .join('|');
 
     expect(sig1).not.toBe(sig2);
-  }, 25000); // 25 second timeout
+  }, 25000);
 });

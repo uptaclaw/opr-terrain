@@ -95,6 +95,7 @@ export interface GenerateTerrainLayoutOptions {
   maxLayoutAttempts?: number;
   random?: () => number;
   placementConfig?: PlacementConfig;
+  enforceOPRGuidelines?: boolean;
 }
 
 export interface TerrainLayout {

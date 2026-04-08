@@ -108,6 +108,10 @@ export function AutoPlacementGenerator({
 
     try {
       const random = createSeededRandom(createRegenerationSeed());
+      const enforceOPRGuidelines =
+        placementConfig.strategy !== 'symmetrical' &&
+        placementConfig.strategy !== 'asymmetric' &&
+        !(placementConfig.strategy === 'balanced-coverage' && placementConfig.forceSymmetry);
       const layout = generateTerrainLayout({
         widthInches,
         heightInches,
@@ -115,6 +119,7 @@ export function AutoPlacementGenerator({
         pieceCount: targetPieceCount,
         placementConfig,
         random,
+        enforceOPRGuidelines,
       });
 
       onLayoutGenerated(layout);

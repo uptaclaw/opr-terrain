@@ -2,8 +2,9 @@
  * OPR Age of Fantasy terrain placement guidelines (Rulebook page 12)
  */
 
-import type { TerrainPiece, TerrainTrait, TerrainShapeKind } from './types';
+import type { TerrainPiece, TerrainShapeKind, TerrainTrait } from './types';
 import { getTemplateById, terrainCatalog } from './catalog';
+import { distanceBetweenPieces, distancePointToPiece, getShapeArea, segmentIntersectsPiece } from './geometry';
 
 export interface OPRGuidelines {
   minPieces: number;
@@ -41,7 +42,7 @@ export interface OPRValidation {
 
 export const OPR_DEFAULT_GUIDELINES: OPRGuidelines = {
   minPieces: 10,
-  maxPieces: 20, // More is better, but we cap at 20 for practical purposes
+  maxPieces: 20,
   minCoveragePercent: 50,
   minLosBlockingPercent: 50,
   minCoverPercent: 33,
@@ -52,23 +53,7 @@ export const OPR_DEFAULT_GUIDELINES: OPRGuidelines = {
 };
 
 /**
- * Calculate actual shape area based on terrain piece shape
- */
-const getShapeArea = (piece: TerrainPiece): number => {
-  switch (piece.shape.kind) {
-    case 'circle':
-      return Math.PI * piece.shape.radius * piece.shape.radius;
-    case 'rectangle':
-      return piece.shape.width * piece.shape.height;
-    case 'polygon':
-      // For polygons, use collision radius as approximation
-      // Could improve with proper polygon area calculation if needed
-      return Math.PI * piece.collisionRadius * piece.collisionRadius;
-  }
-};
-
-/**
- * Calculate table coverage percentage based on terrain piece areas
+ * Calculate table coverage percentage based on actual terrain piece areas.
  */
 export const calculateCoveragePercent = (
   pieces: readonly TerrainPiece[],
@@ -76,32 +61,26 @@ export const calculateCoveragePercent = (
   tableHeightInches: number,
 ): number => {
   const tableArea = tableWidthInches * tableHeightInches;
-  
-  // Calculate actual area based on shape
-  const totalTerrainArea = pieces.reduce((sum, piece) => {
-    return sum + getShapeArea(piece);
-  }, 0);
+  const totalTerrainArea = pieces.reduce((sum, piece) => sum + getShapeArea(piece.shape), 0);
 
   return (totalTerrainArea / tableArea) * 100;
 };
 
 /**
- * Check if a piece has a specific trait
+ * Check if a piece has a specific trait.
  */
-const hasTrait = (piece: TerrainPiece, trait: TerrainTrait): boolean => {
-  return piece.traits.includes(trait);
-};
+const hasTrait = (piece: TerrainPiece, trait: TerrainTrait): boolean => piece.traits.includes(trait);
 
 /**
- * Calculate trait distribution percentages
+ * Calculate trait distribution percentages.
  */
 export const calculateTraitDistribution = (pieces: readonly TerrainPiece[]) => {
   const total = pieces.length;
-  
-  const losBlocking = pieces.filter(p => hasTrait(p, 'LoS Blocking')).length;
-  const cover = pieces.filter(p => hasTrait(p, 'Soft Cover') || hasTrait(p, 'Hard Cover')).length;
-  const difficult = pieces.filter(p => hasTrait(p, 'Difficult')).length;
-  const dangerous = pieces.filter(p => hasTrait(p, 'Dangerous')).length;
+
+  const losBlocking = pieces.filter((piece) => hasTrait(piece, 'LoS Blocking')).length;
+  const cover = pieces.filter((piece) => hasTrait(piece, 'Soft Cover') || hasTrait(piece, 'Hard Cover')).length;
+  const difficult = pieces.filter((piece) => hasTrait(piece, 'Difficult')).length;
+  const dangerous = pieces.filter((piece) => hasTrait(piece, 'Dangerous')).length;
 
   return {
     losBlockingPercent: total > 0 ? (losBlocking / total) * 100 : 0,
@@ -112,20 +91,18 @@ export const calculateTraitDistribution = (pieces: readonly TerrainPiece[]) => {
 };
 
 /**
- * Calculate minimum gap between any two pieces
+ * Calculate the minimum edge-to-edge gap between any two pieces.
  */
 export const calculateMinGap = (pieces: readonly TerrainPiece[]): number => {
-  if (pieces.length < 2) return Infinity;
+  if (pieces.length < 2) {
+    return Infinity;
+  }
 
   let minGap = Infinity;
 
-  for (let i = 0; i < pieces.length; i++) {
-    for (let j = i + 1; j < pieces.length; j++) {
-      const pieceA = pieces[i]!;
-      const pieceB = pieces[j]!;
-      const distance = Math.hypot(pieceA.x - pieceB.x, pieceA.y - pieceB.y);
-      const gap = distance - pieceA.collisionRadius - pieceB.collisionRadius;
-      minGap = Math.min(minGap, gap);
+  for (let index = 0; index < pieces.length; index += 1) {
+    for (let otherIndex = index + 1; otherIndex < pieces.length; otherIndex += 1) {
+      minGap = Math.min(minGap, distanceBetweenPieces(pieces[index]!, pieces[otherIndex]!));
     }
   }
 
@@ -133,134 +110,83 @@ export const calculateMinGap = (pieces: readonly TerrainPiece[]): number => {
 };
 
 /**
- * Calculate maximum gap between adjacent pieces
- * Uses a grid-based approach to find large empty spaces
+ * Calculate maximum open gap on the table by sampling points and measuring
+ * the nearest distance to any terrain piece. The widest gap is twice the
+ * maximum clearance from an empty point to the nearest terrain edge.
  */
 export const calculateMaxGap = (
   pieces: readonly TerrainPiece[],
   tableWidthInches: number,
   tableHeightInches: number,
 ): number => {
-  // Create a simple grid to find largest empty areas
-  const gridSize = 2; // Use 2 inch cells for better performance
-  const cols = Math.ceil(tableWidthInches / gridSize);
-  const rows = Math.ceil(tableHeightInches / gridSize);
-  
-  // Mark cells occupied by terrain
-  const occupied = new Set<string>();
-  
-  for (const piece of pieces) {
-    const radius = piece.collisionRadius;
-    const minCol = Math.max(0, Math.floor((piece.x - radius) / gridSize));
-    const maxCol = Math.min(cols - 1, Math.floor((piece.x + radius) / gridSize));
-    const minRow = Math.max(0, Math.floor((piece.y - radius) / gridSize));
-    const maxRow = Math.min(rows - 1, Math.floor((piece.y + radius) / gridSize));
-    
-    for (let col = minCol; col <= maxCol; col++) {
-      for (let row = minRow; row <= maxRow; row++) {
-        const cellX = col * gridSize + gridSize / 2;
-        const cellY = row * gridSize + gridSize / 2;
-        const dist = Math.hypot(cellX - piece.x, cellY - piece.y);
-        if (dist <= radius) {
-          occupied.add(`${col},${row}`);
-        }
+  if (pieces.length === 0) {
+    return Math.max(tableWidthInches, tableHeightInches);
+  }
+
+  const sampleStep = 1;
+  let maxClearance = 0;
+
+  for (let x = 0; x <= tableWidthInches; x += sampleStep) {
+    for (let y = 0; y <= tableHeightInches; y += sampleStep) {
+      let nearestTerrain = Infinity;
+
+      for (const piece of pieces) {
+        nearestTerrain = Math.min(nearestTerrain, distancePointToPiece({ x, y }, piece));
       }
+
+      maxClearance = Math.max(maxClearance, nearestTerrain);
     }
   }
-  
-  // Find largest contiguous empty area
-  let maxGap = 0;
-  const globalVisited = new Set<string>(); // Track all processed cells
-  
-  for (let col = 0; col < cols; col++) {
-    for (let row = 0; row < rows; row++) {
-      const startKey = `${col},${row}`;
-      if (!occupied.has(startKey) && !globalVisited.has(startKey)) {
-        // BFS to find size of this empty region
-        const queue: Array<[number, number]> = [[col, row]];
-        const visited = new Set<string>([startKey]);
-        let area = 0;
-        
-        while (queue.length > 0) {
-          const [c, r] = queue.shift()!;
-          area++;
-          globalVisited.add(`${c},${r}`); // Mark as processed globally
-          
-          // Check 4 neighbors
-          for (const [dc, dr] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
-            const nc = c + dc;
-            const nr = r + dr;
-            const key = `${nc},${nr}`;
-            
-            if (nc >= 0 && nc < cols && nr >= 0 && nr < rows && !visited.has(key) && !occupied.has(key)) {
-              visited.add(key);
-              queue.push([nc, nr]);
-            }
-          }
-        }
-        
-        // Convert area to approximate diameter
-        const diameter = Math.sqrt(area) * gridSize;
-        maxGap = Math.max(maxGap, diameter);
-      }
-    }
-  }
-  
-  return maxGap;
+
+  return maxClearance * 2;
 };
 
 /**
- * Check if there's a clear line of sight from edge to edge
- * Tests several points along each edge
+ * Check if there is an uninterrupted edge-to-edge sightline through the main
+ * play lanes of the table. Lanes are sampled at the midpoint of each 12" wide
+ * column and 18" tall row, which matches the OPR reference spacing bands.
  */
 export const hasEdgeToEdgeSightline = (
   pieces: readonly TerrainPiece[],
   tableWidthInches: number,
   tableHeightInches: number,
 ): boolean => {
-  const losBlockers = pieces.filter(p => hasTrait(p, 'LoS Blocking'));
-  
-  if (losBlockers.length === 0) return true;
-  
-  const testPoints = 5; // Test points along each edge
-  
-  // Test horizontal sightlines (left to right)
-  for (let i = 0; i < testPoints; i++) {
-    const y = (tableHeightInches / (testPoints - 1)) * i;
-    let blocked = false;
-    
-    for (const piece of losBlockers) {
-      // Check if line from (0, y) to (width, y) intersects piece
-      if (Math.abs(piece.y - y) <= piece.collisionRadius) {
-        blocked = true;
-        break;
-      }
-    }
-    
-    if (!blocked) return true; // Found unblocked sightline
+  const losBlockers = pieces.filter((piece) => hasTrait(piece, 'LoS Blocking'));
+
+  if (losBlockers.length === 0) {
+    return true;
   }
-  
-  // Test vertical sightlines (top to bottom)
-  for (let i = 0; i < testPoints; i++) {
-    const x = (tableWidthInches / (testPoints - 1)) * i;
-    let blocked = false;
-    
-    for (const piece of losBlockers) {
-      // Check if line from (x, 0) to (x, height) intersects piece
-      if (Math.abs(piece.x - x) <= piece.collisionRadius) {
-        blocked = true;
-        break;
-      }
+
+  const sampleColumns = Math.max(2, Math.round(tableWidthInches / 12));
+  const sampleRows = Math.max(2, Math.round(tableHeightInches / 18));
+
+  for (let row = 0; row < sampleRows; row += 1) {
+    const y = (tableHeightInches / sampleRows) * (row + 0.5);
+    const blocked = losBlockers.some((piece) =>
+      segmentIntersectsPiece({ x: 0, y }, { x: tableWidthInches, y }, piece),
+    );
+
+    if (!blocked) {
+      return true;
     }
-    
-    if (!blocked) return true; // Found unblocked sightline
   }
-  
-  return false; // All tested sightlines are blocked
+
+  for (let column = 0; column < sampleColumns; column += 1) {
+    const x = (tableWidthInches / sampleColumns) * (column + 0.5);
+    const blocked = losBlockers.some((piece) =>
+      segmentIntersectsPiece({ x, y: 0 }, { x, y: tableHeightInches }, piece),
+    );
+
+    if (!blocked) {
+      return true;
+    }
+  }
+
+  return false;
 };
 
 /**
- * Validate terrain layout against OPR guidelines
+ * Validate terrain layout against OPR guidelines.
  */
 export const validateOPRLayout = (
   pieces: readonly TerrainPiece[],
@@ -294,7 +220,7 @@ export const validateOPRLayout = (
     meetsMinGap: minGap >= guidelines.minGapInches,
     meetsMaxGap: maxGap <= guidelines.maxGapInches,
     edgeToEdgeClear,
-    allValid: false, // Set below
+    allValid: false,
   };
 
   validation.allValid =
@@ -313,109 +239,84 @@ export const validateOPRLayout = (
 };
 
 /**
- * Build terrain selection following OPR trait requirements
+ * Build terrain selection following OPR trait requirements.
  */
 export const buildOPRTerrainSelection = (
   targetCount: number,
   random: () => number,
 ): Array<{ templateId: string; shapeKind: TerrainShapeKind }> => {
   const selections: Array<{ templateId: string; shapeKind: TerrainShapeKind }> = [];
-  
-  // Calculate required counts
+
   const minLosBlocking = Math.ceil(targetCount * 0.5);
   const minCover = Math.ceil(targetCount * 0.33);
   const minDifficult = Math.ceil(targetCount * 0.33);
   const dangerousCount = 2;
-  
-  // Categorize templates
-  const losBlockingTemplates = terrainCatalog.filter(t => t.traits.includes('LoS Blocking'));
-  const coverTemplates = terrainCatalog.filter(t => 
-    t.traits.includes('Soft Cover') || t.traits.includes('Hard Cover')
+
+  const losBlockingTemplates = terrainCatalog.filter((template) => template.traits.includes('LoS Blocking'));
+  const coverTemplates = terrainCatalog.filter(
+    (template) => template.traits.includes('Soft Cover') || template.traits.includes('Hard Cover'),
   );
-  const difficultTemplates = terrainCatalog.filter(t => t.traits.includes('Difficult'));
-  const dangerousTemplates = terrainCatalog.filter(t => t.traits.includes('Dangerous'));
-  
-  // Helper to pick random template and shape
+  const difficultTemplates = terrainCatalog.filter((template) => template.traits.includes('Difficult'));
+  const dangerousTemplates = terrainCatalog.filter((template) => template.traits.includes('Dangerous'));
+
   const pickTemplate = (templates: typeof terrainCatalog) => {
     const template = templates[Math.floor(random() * templates.length)]!;
     const shapeKind = template.shapeKinds[Math.floor(random() * template.shapeKinds.length)]!;
     return { templateId: template.id, shapeKind };
   };
-  
-  // Helper to recount traits (handles multi-trait pieces)
+
   const recountTraits = () => {
-    const losBlocking = selections.filter(s => {
-      const t = getTemplateById(s.templateId);
-      return t.traits.includes('LoS Blocking');
+    const losBlocking = selections.filter((selection) => {
+      const template = getTemplateById(selection.templateId);
+      return template.traits.includes('LoS Blocking');
     }).length;
-    
-    const cover = selections.filter(s => {
-      const t = getTemplateById(s.templateId);
-      return t.traits.includes('Soft Cover') || t.traits.includes('Hard Cover');
+
+    const cover = selections.filter((selection) => {
+      const template = getTemplateById(selection.templateId);
+      return template.traits.includes('Soft Cover') || template.traits.includes('Hard Cover');
     }).length;
-    
-    const difficult = selections.filter(s => {
-      const t = getTemplateById(s.templateId);
-      return t.traits.includes('Difficult');
+
+    const difficult = selections.filter((selection) => {
+      const template = getTemplateById(selection.templateId);
+      return template.traits.includes('Difficult');
     }).length;
-    
-    const dangerous = selections.filter(s => {
-      const t = getTemplateById(s.templateId);
-      return t.traits.includes('Dangerous');
+
+    const dangerous = selections.filter((selection) => {
+      const template = getTemplateById(selection.templateId);
+      return template.traits.includes('Dangerous');
     }).length;
-    
+
     return { losBlocking, cover, difficult, dangerous };
   };
-  
-  // Add exactly 2 dangerous pieces
-  for (let i = 0; i < dangerousCount && selections.length < targetCount; i++) {
+
+  for (let index = 0; index < dangerousCount && selections.length < targetCount; index += 1) {
     selections.push(pickTemplate(dangerousTemplates));
   }
-  
-  // Prioritize LoS blocking (50% requirement)
+
   while (selections.length < targetCount) {
     const counts = recountTraits();
-    
-    // Never exceed 2 dangerous pieces
-    const nonDangerousTemplates = terrainCatalog.filter(t => !t.traits.includes('Dangerous'));
-    
+    const nonDangerousTemplates = terrainCatalog.filter((template) => !template.traits.includes('Dangerous'));
+
     if (counts.losBlocking < minLosBlocking && losBlockingTemplates.length > 0) {
-      // Pick from LoS blocking that aren't dangerous, or already added dangerous
-      const safeLosBlocking = losBlockingTemplates.filter(t => 
-        !t.traits.includes('Dangerous') || counts.dangerous < dangerousCount
+      const safeLosBlocking = losBlockingTemplates.filter(
+        (template) => !template.traits.includes('Dangerous') || counts.dangerous < dangerousCount,
       );
-      if (safeLosBlocking.length > 0) {
-        selections.push(pickTemplate(safeLosBlocking));
-      } else {
-        selections.push(pickTemplate(losBlockingTemplates));
-      }
+      selections.push(pickTemplate(safeLosBlocking.length > 0 ? safeLosBlocking : losBlockingTemplates));
     } else if (counts.cover < minCover && coverTemplates.length > 0) {
-      const safeCover = coverTemplates.filter(t => 
-        !t.traits.includes('Dangerous') || counts.dangerous < dangerousCount
+      const safeCover = coverTemplates.filter(
+        (template) => !template.traits.includes('Dangerous') || counts.dangerous < dangerousCount,
       );
-      if (safeCover.length > 0) {
-        selections.push(pickTemplate(safeCover));
-      } else {
-        selections.push(pickTemplate(coverTemplates));
-      }
+      selections.push(pickTemplate(safeCover.length > 0 ? safeCover : coverTemplates));
     } else if (counts.difficult < minDifficult && difficultTemplates.length > 0) {
-      const safeDifficult = difficultTemplates.filter(t => 
-        !t.traits.includes('Dangerous') || counts.dangerous < dangerousCount
+      const safeDifficult = difficultTemplates.filter(
+        (template) => !template.traits.includes('Dangerous') || counts.dangerous < dangerousCount,
       );
-      if (safeDifficult.length > 0) {
-        selections.push(pickTemplate(safeDifficult));
-      } else {
-        selections.push(pickTemplate(difficultTemplates));
-      }
+      selections.push(pickTemplate(safeDifficult.length > 0 ? safeDifficult : difficultTemplates));
     } else {
-      // Fill remaining with random weighted selection (exclude dangerous if we have 2)
-      const eligibleTemplates = counts.dangerous >= dangerousCount 
-        ? nonDangerousTemplates 
-        : terrainCatalog;
-      
-      const totalWeight = eligibleTemplates.reduce((sum, t) => sum + t.weight, 0);
+      const eligibleTemplates = counts.dangerous >= dangerousCount ? nonDangerousTemplates : terrainCatalog;
+      const totalWeight = eligibleTemplates.reduce((sum, template) => sum + template.weight, 0);
       let roll = random() * totalWeight;
-      
+
       for (const template of eligibleTemplates) {
         roll -= template.weight;
         if (roll <= 0) {
@@ -426,12 +327,11 @@ export const buildOPRTerrainSelection = (
       }
     }
   }
-  
-  // Shuffle to avoid patterns
-  for (let i = selections.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [selections[i], selections[j]] = [selections[j]!, selections[i]!];
+
+  for (let index = selections.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [selections[index], selections[swapIndex]] = [selections[swapIndex]!, selections[index]!];
   }
-  
+
   return selections.slice(0, targetCount);
 };

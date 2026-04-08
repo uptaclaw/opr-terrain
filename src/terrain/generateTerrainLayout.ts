@@ -28,8 +28,9 @@ import {
   getPlacementDensityMultiplier,
   getQuarterIndex as getQuarterIndexUtil,
 } from './placementStrategies';
+import { distanceBetweenPieces, getShapeCollisionRadius } from './geometry';
 import { buildOPRTerrainSelection, validateOPRLayout } from './oprPlacement';
-import { generateOPRCompliantLayout } from './zonePlacement';
+import { generateOPRGridLayout } from './oprGridPlacement';
 
 const DEFAULT_WIDTH = DEFAULT_TABLE_WIDTH_INCHES;
 const DEFAULT_HEIGHT = DEFAULT_TABLE_HEIGHT_INCHES;
@@ -107,18 +108,6 @@ const normalizeRotation = (rotation: number) => ((rotation % 360) + 360) % 360;
 
 const getMirroredRotation = (rotation: number, axis: SymmetryAxis) =>
   axis === 'vertical' ? normalizeRotation(180 - rotation) : normalizeRotation(-rotation);
-
-const getShapeCollisionRadius = (shape: TerrainShape) => {
-  if (shape.kind === 'circle') {
-    return shape.radius;
-  }
-
-  if (shape.kind === 'rectangle') {
-    return Math.hypot(shape.width / 2, shape.height / 2);
-  }
-
-  return shape.points.reduce((largest, point) => Math.max(largest, Math.hypot(point.x, point.y)), 0);
-};
 
 const getPlacementRadius = (piece: TerrainPiece, collisionBufferInches: number) =>
   piece.collisionRadius + collisionBufferInches / 2;
@@ -384,9 +373,16 @@ export const piecesOverlap = (
   left: TerrainPiece,
   right: TerrainPiece,
   collisionBufferInches = DEFAULT_COLLISION_BUFFER,
-) =>
-  Math.hypot(left.x - right.x, left.y - right.y) <
-  left.collisionRadius + right.collisionRadius + collisionBufferInches;
+) => {
+  const centerDistance = Math.hypot(left.x - right.x, left.y - right.y);
+  const maxPossibleGap = left.collisionRadius + right.collisionRadius + collisionBufferInches;
+
+  if (centerDistance >= maxPossibleGap) {
+    return false;
+  }
+
+  return distanceBetweenPieces(left, right) < collisionBufferInches;
+};
 
 const isPlacementValid = (
   candidate: TerrainPiece,
@@ -830,7 +826,8 @@ const tryPlacePiece = (
   }
 
   if (strategy === 'asymmetric' && pieceIndex !== undefined && totalPieces !== undefined && asymmetricContext) {
-    const isDensePiece = pieceIndex < Math.floor(totalPieces * 0.66);
+    const densePieceCutoff = Math.max(1, Math.ceil(totalPieces * 0.75));
+    const isDensePiece = pieceIndex < densePieceCutoff;
 
     let boundsMinX: number;
     let boundsMaxX: number;
@@ -838,17 +835,17 @@ const tryPlacePiece = (
     if (isDensePiece) {
       if (asymmetricContext.denseSide === 'left') {
         boundsMinX = placementRadius;
-        boundsMaxX = widthInches * 0.55;
+        boundsMaxX = widthInches * 0.42;
       } else {
-        boundsMinX = widthInches * 0.45;
+        boundsMinX = widthInches * 0.58;
         boundsMaxX = widthInches - placementRadius;
       }
     } else if (asymmetricContext.denseSide === 'left') {
-      boundsMinX = widthInches * 0.6;
+      boundsMinX = widthInches * 0.72;
       boundsMaxX = widthInches - placementRadius;
     } else {
       boundsMinX = placementRadius;
-      boundsMaxX = widthInches * 0.4;
+      boundsMaxX = widthInches * 0.28;
     }
 
     return tryPlacePieceWithinBounds(
@@ -922,6 +919,7 @@ export const generateTerrainLayout = (
     maxAttemptsPerPiece = DEFAULT_MAX_ATTEMPTS_PER_PIECE,
     maxLayoutAttempts = DEFAULT_MAX_LAYOUT_ATTEMPTS,
     placementConfig,
+    enforceOPRGuidelines,
   } = options;
 
   const random = options.random ?? createDefaultRandom();
@@ -938,33 +936,44 @@ export const generateTerrainLayout = (
     throw new Error('Terrain layout generator supports up to 20 pieces while keeping quarter balance.');
   }
 
-  // Try zone-based OPR-compliant placement first
-  const pieceSpecs = buildPieceSpecs(targetPieceCount, random);
-  const zoneResult = generateOPRCompliantLayout(
-    pieceSpecs,
-    widthInches,
-    heightInches,
-    deploymentDepthInches,
-    collisionBufferInches,
-    random,
-    maxLayoutAttempts,
-  );
+  const shouldEnforceOPRGuidelines = enforceOPRGuidelines ?? !placementConfig;
 
-  if (zoneResult && zoneResult.success) {
-    // Zone placement succeeded and is OPR-compliant
-    return {
-      widthInches,
-      heightInches,
-      deploymentDepthInches,
-      targetPieceCount,
-      quarterTargets: [0, 0, 0, 0] as [number, number, number, number],
-      pieces: zoneResult.pieces,
-      placementConfig,
-      oprValidation: zoneResult.oprValidation,
-    };
+  if (shouldEnforceOPRGuidelines && targetPieceCount >= 10) {
+    for (let layoutAttempt = 0; layoutAttempt < maxLayoutAttempts; layoutAttempt += 1) {
+      const oprPieces = generateOPRGridLayout({
+        widthInches,
+        heightInches,
+        deploymentDepthInches,
+        targetPieceCount,
+        gapInches: collisionBufferInches,
+        placementConfig,
+        random,
+      });
+
+      if (!oprPieces) {
+        continue;
+      }
+
+      const oprValidation = validateOPRLayout(oprPieces, widthInches, heightInches);
+
+      if (oprValidation.allValid) {
+        return {
+          widthInches,
+          heightInches,
+          deploymentDepthInches,
+          targetPieceCount,
+          quarterTargets: [0, 0, 0, 0] as [number, number, number, number],
+          pieces: oprPieces,
+          placementConfig,
+          oprValidation,
+        };
+      }
+    }
+
+    throw new Error('Unable to generate an OPR-compliant terrain layout after repeated placement attempts.');
   }
 
-  // Fallback to original placement strategies if zone placement fails
+  // Fallback to original placement strategies when OPR enforcement is disabled.
   for (let layoutAttempt = 0; layoutAttempt < maxLayoutAttempts; layoutAttempt += 1) {
     const strategy = placementConfig?.strategy || 'random';
     const useMirroredPlacement =
