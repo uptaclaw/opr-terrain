@@ -141,68 +141,91 @@ export const calculateMaxGap = (
   tableWidthInches: number,
   tableHeightInches: number,
 ): number => {
-  // Create a simple grid to find largest empty areas
+  // Create a simple grid to find largest empty areas.
+  // Use numeric cell indexes so we can flood-fill each empty region once
+  // instead of re-running the same BFS from every empty cell.
   const gridSize = 1; // 1 inch cells
   const cols = Math.ceil(tableWidthInches / gridSize);
   const rows = Math.ceil(tableHeightInches / gridSize);
-  
-  // Mark cells occupied by terrain
-  const occupied = new Set<string>();
-  
+  const cellCount = cols * rows;
+  const occupied = new Uint8Array(cellCount);
+  const exploredEmpty = new Uint8Array(cellCount);
+  const toIndex = (col: number, row: number) => row * cols + col;
+
   for (const piece of pieces) {
     const radius = piece.collisionRadius;
     const minCol = Math.max(0, Math.floor((piece.x - radius) / gridSize));
     const maxCol = Math.min(cols - 1, Math.floor((piece.x + radius) / gridSize));
     const minRow = Math.max(0, Math.floor((piece.y - radius) / gridSize));
     const maxRow = Math.min(rows - 1, Math.floor((piece.y + radius) / gridSize));
-    
+
     for (let col = minCol; col <= maxCol; col++) {
       for (let row = minRow; row <= maxRow; row++) {
         const cellX = col * gridSize + gridSize / 2;
         const cellY = row * gridSize + gridSize / 2;
         const dist = Math.hypot(cellX - piece.x, cellY - piece.y);
+
         if (dist <= radius) {
-          occupied.add(`${col},${row}`);
+          occupied[toIndex(col, row)] = 1;
         }
       }
     }
   }
-  
-  // Find largest contiguous empty area
+
   let maxGap = 0;
-  
+  const queueCols: number[] = [];
+  const queueRows: number[] = [];
+  const neighborOffsets: Array<[number, number]> = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+
   for (let col = 0; col < cols; col++) {
     for (let row = 0; row < rows; row++) {
-      if (!occupied.has(`${col},${row}`)) {
-        // BFS to find size of this empty region
-        const queue: Array<[number, number]> = [[col, row]];
-        const visited = new Set<string>([`${col},${row}`]);
-        let area = 0;
-        
-        while (queue.length > 0) {
-          const [c, r] = queue.shift()!;
-          area++;
-          
-          // Check 4 neighbors
-          for (const [dc, dr] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
-            const nc = c + dc;
-            const nr = r + dr;
-            const key = `${nc},${nr}`;
-            
-            if (nc >= 0 && nc < cols && nr >= 0 && nr < rows && !visited.has(key) && !occupied.has(key)) {
-              visited.add(key);
-              queue.push([nc, nr]);
-            }
-          }
-        }
-        
-        // Convert area to approximate diameter
-        const diameter = Math.sqrt(area) * gridSize;
-        maxGap = Math.max(maxGap, diameter);
+      const startIndex = toIndex(col, row);
+
+      if (occupied[startIndex] || exploredEmpty[startIndex]) {
+        continue;
       }
+
+      queueCols.length = 0;
+      queueRows.length = 0;
+      queueCols.push(col);
+      queueRows.push(row);
+      exploredEmpty[startIndex] = 1;
+
+      let area = 0;
+      let head = 0;
+
+      while (head < queueCols.length) {
+        const currentCol = queueCols[head]!;
+        const currentRow = queueRows[head]!;
+        head += 1;
+        area += 1;
+
+        for (const [dc, dr] of neighborOffsets) {
+          const nextCol = currentCol + dc;
+          const nextRow = currentRow + dr;
+
+          if (nextCol < 0 || nextCol >= cols || nextRow < 0 || nextRow >= rows) {
+            continue;
+          }
+
+          const nextIndex = toIndex(nextCol, nextRow);
+
+          if (occupied[nextIndex] || exploredEmpty[nextIndex]) {
+            continue;
+          }
+
+          exploredEmpty[nextIndex] = 1;
+          queueCols.push(nextCol);
+          queueRows.push(nextRow);
+        }
+      }
+
+      // Convert area to approximate diameter.
+      const diameter = Math.sqrt(area) * gridSize;
+      maxGap = Math.max(maxGap, diameter);
     }
   }
-  
+
   return maxGap;
 };
 
