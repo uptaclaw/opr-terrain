@@ -11,6 +11,7 @@ import {
   DEFAULT_TABLE_WIDTH_INCHES,
   getDeploymentOrientation,
 } from '../table/tableGeometry';
+import type { SightlineSegment } from '../lib/lineOfSight';
 import { TERRAIN_TRAIT_SHORT_LABELS, type TerrainPiece as EditorTerrainPiece } from '../terrain/types';
 import type { TerrainPiece as LayoutTerrainPiece } from '../types/layout';
 
@@ -29,6 +30,7 @@ export interface TableCanvasProps {
   svgRef?: Ref<SVGSVGElement>;
   draggingPieceId?: string | null;
   libraryDragActive?: boolean;
+  clearSightlines?: SightlineSegment[];
   onCanvasMouseDown?: (event: ReactMouseEvent<SVGSVGElement>) => void;
   onCanvasDragOver?: (event: ReactDragEvent<HTMLDivElement>) => void;
   onCanvasDrop?: (event: ReactDragEvent<HTMLDivElement>) => void;
@@ -283,6 +285,7 @@ export function TableCanvas({
   svgRef,
   draggingPieceId = null,
   libraryDragActive = false,
+  clearSightlines = [],
   onCanvasMouseDown,
   onCanvasDragOver,
   onCanvasDrop,
@@ -677,6 +680,24 @@ export function TableCanvas({
                 </g>
               );
             })()
+          ) : null}
+
+          {!editorMode && !cleanOutput && clearSightlines.length > 0 ? (
+            <g aria-hidden="true" pointerEvents="none">
+              {clearSightlines.map((sightline, index) => (
+                <line
+                  key={`los-clear-sightline-${index}`}
+                  data-testid="los-clear-sightline"
+                  x1={tableX + sightline.start.x}
+                  y1={tableY + heightInches - sightline.start.y}
+                  x2={tableX + sightline.end.x}
+                  y2={tableY + heightInches - sightline.end.y}
+                  stroke="#ef4444"
+                  strokeWidth={0.16}
+                  strokeOpacity={0.35}
+                />
+              ))}
+            </g>
           ) : null}
 
           {libraryDragActive ? (

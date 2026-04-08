@@ -3,6 +3,7 @@
  */
 
 import type { TerrainPiece, TerrainTrait, TerrainShapeKind } from './types';
+import { findClearEdgeToEdgeSightlinesForTerrain } from '../lib/lineOfSight';
 import { getTemplateById, terrainCatalog } from './catalog';
 
 export interface OPRGuidelines {
@@ -230,54 +231,15 @@ export const calculateMaxGap = (
 };
 
 /**
- * Check if there's a clear line of sight from edge to edge
- * Tests several points along each edge
+ * Check whether any clear sightline remains between the opposite long edges of the table.
+ * Every terrain piece counts as blocking terrain for this validation.
  */
 export const hasEdgeToEdgeSightline = (
   pieces: readonly TerrainPiece[],
   tableWidthInches: number,
   tableHeightInches: number,
-): boolean => {
-  const losBlockers = pieces.filter(p => hasTrait(p, 'LoS Blocking'));
-  
-  if (losBlockers.length === 0) return true;
-  
-  const testPoints = 5; // Test points along each edge
-  
-  // Test horizontal sightlines (left to right)
-  for (let i = 0; i < testPoints; i++) {
-    const y = (tableHeightInches / (testPoints - 1)) * i;
-    let blocked = false;
-    
-    for (const piece of losBlockers) {
-      // Check if line from (0, y) to (width, y) intersects piece
-      if (Math.abs(piece.y - y) <= piece.collisionRadius) {
-        blocked = true;
-        break;
-      }
-    }
-    
-    if (!blocked) return true; // Found unblocked sightline
-  }
-  
-  // Test vertical sightlines (top to bottom)
-  for (let i = 0; i < testPoints; i++) {
-    const x = (tableWidthInches / (testPoints - 1)) * i;
-    let blocked = false;
-    
-    for (const piece of losBlockers) {
-      // Check if line from (x, 0) to (x, height) intersects piece
-      if (Math.abs(piece.x - x) <= piece.collisionRadius) {
-        blocked = true;
-        break;
-      }
-    }
-    
-    if (!blocked) return true; // Found unblocked sightline
-  }
-  
-  return false; // All tested sightlines are blocked
-};
+): boolean =>
+  findClearEdgeToEdgeSightlinesForTerrain(pieces, tableWidthInches, tableHeightInches).clearSightlineCount > 0;
 
 /**
  * Validate terrain layout against OPR guidelines
