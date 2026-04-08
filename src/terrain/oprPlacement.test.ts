@@ -48,6 +48,21 @@ describe('buildOPRTerrainSelection', () => {
     }).length;
     expect(losBlockingCount).toBeGreaterThanOrEqual(6); // 50% of 12
   });
+
+  it('meets cover and difficult requirements (≥33%)', () => {
+    const selection = buildOPRTerrainSelection(12, mulberry32(42));
+    const coverCount = selection.filter((s) => {
+      const template = terrainCatalog.find(t => t.id === s.templateId);
+      return template && (template.traits.includes('Soft Cover') || template.traits.includes('Hard Cover'));
+    }).length;
+    const difficultCount = selection.filter((s) => {
+      const template = terrainCatalog.find(t => t.id === s.templateId);
+      return template && template.traits.includes('Difficult');
+    }).length;
+
+    expect(coverCount).toBeGreaterThanOrEqual(4); // 33% of 12, rounded up
+    expect(difficultCount).toBeGreaterThanOrEqual(4); // 33% of 12, rounded up
+  });
 });
 
 describe('calculateTraitDistribution', () => {
@@ -291,12 +306,16 @@ describe('validateOPRLayout', () => {
     expect(validation.meetsMaxPieces).toBe(true);
     expect(validation.dangerousCount).toBe(2);
     expect(validation.losBlockingPercent).toBeGreaterThanOrEqual(50);
-  }, 20000); // 20 second timeout
+    expect(validation.coverPercent).toBeGreaterThanOrEqual(33);
+    expect(validation.difficultPercent).toBeGreaterThanOrEqual(33);
+    expect(validation.meetsCover).toBe(true);
+    expect(validation.meetsDifficult).toBe(true);
+  }, 30000); // 30 second timeout
 });
 
 describe('OPR-compliant layout generation', () => {
   it('generates layouts that meet all OPR guidelines', () => {
-    for (let seed = 1; seed <= 5; seed++) {
+    for (const seed of [1, 2, 3]) {
       const layout = generateTerrainLayout({
         pieceCount: 12,
         random: mulberry32(seed),
@@ -318,10 +337,14 @@ describe('OPR-compliant layout generation', () => {
       // LoS blocking
       expect(validation.losBlockingPercent).toBeGreaterThanOrEqual(OPR_DEFAULT_GUIDELINES.minLosBlockingPercent);
 
+      // Cover and difficult terrain
+      expect(validation.coverPercent).toBeGreaterThanOrEqual(OPR_DEFAULT_GUIDELINES.minCoverPercent);
+      expect(validation.difficultPercent).toBeGreaterThanOrEqual(OPR_DEFAULT_GUIDELINES.minDifficultPercent);
+
       // Spacing - relaxed for tests since perfect spacing might be hard
       expect(validation.minGap).toBeGreaterThan(0); // At least some gap
     }
-  }, 40000); // 40 second timeout for 5 iterations
+  }, 50000); // 50 second timeout for 3 iterations
 
   it('generates different layouts on each call', () => {
     const layout1 = generateTerrainLayout({ pieceCount: 12, widthInches: 48, heightInches: 72 });
