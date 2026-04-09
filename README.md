@@ -16,12 +16,16 @@ A Vite + React + TypeScript battlefield layout planner for One Page Rules style 
 
 [![Validate & Deploy](https://github.com/uptaclaw/opr-terrain/actions/workflows/deploy.yml/badge.svg)](https://github.com/uptaclaw/opr-terrain/actions/workflows/deploy.yml)
 
-All pull requests must pass required status checks before merging:
+**Policy: All pull requests should have passing tests before merge.**
+
+Required checks (enforced by policy, not branch protection):
 - ✅ Unit tests (Vitest)
 - ✅ Build validation (TypeScript + Vite)
 - ✅ End-to-end tests (Playwright)
 
-See [docs/BRANCH_PROTECTION.md](docs/BRANCH_PROTECTION.md) for details on branch protection rules and CI requirements.
+GitHub Actions runs these tests automatically on every PR. While we cannot technically enforce test requirements (requires GitHub paid plan for private repos), **developers and reviewers must verify that all CI checks are green before merging**.
+
+See `devclaw/prompts/developer.md` and `devclaw/prompts/reviewer.md` for detailed policy requirements.
 
 ## Scripts
 
@@ -107,7 +111,7 @@ The workflow validates all pull requests and only deploys after checks pass on `
 6. **Runs E2E tests** with `npm run test:e2e` (Playwright)
 7. Fails the PR if any tests fail or build errors occur
 
-**Pull requests cannot be merged unless all checks pass.**
+**Policy: Pull requests should not be merged unless all checks pass.** Developers must verify CI is green before calling work_finish. Reviewers must reject PRs with failing tests.
 
 **On every push to `main`, after validation passes:**
 
