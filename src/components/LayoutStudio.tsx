@@ -348,6 +348,9 @@ export function LayoutStudio() {
   const [rotatingPieceId, setRotatingPieceId] = useState<string | null>(null);
   const [activeSavedLayoutId, setActiveSavedLayoutId] = useState<string | null>(null);
   const [layoutNameInput, setLayoutNameInput] = useState('');
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showLoadModal, setShowLoadModal] = useState(false);
+  const [saveModalInput, setSaveModalInput] = useState('');
   const [statusMessage, setStatusMessage] = useState(
     'Draft changes auto-save locally and update the share URL in the address bar.',
   );
@@ -1102,11 +1105,81 @@ export function LayoutStudio() {
     );
   };
 
+  const handleSaveLayoutFromModal = () => {
+    const name = saveModalInput.trim();
+
+    if (!name) {
+      setStatusMessage('Enter a layout name before saving.');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const existing = savedLayouts.find((savedLayout) => savedLayout.name.toLowerCase() === name.toLowerCase());
+
+    if (existing) {
+      const confirmed = window.confirm(`A layout named "${name}" already exists. Overwrite it?`);
+      if (!confirmed) {
+        return;
+      }
+
+      const updatedLayouts = savedLayouts.map((savedLayout) =>
+        savedLayout.id === existing.id
+          ? {
+              ...savedLayout,
+              name,
+              updatedAt: now,
+              layout: cloneLayout(layout),
+            }
+          : savedLayout,
+      );
+      const persisted = commitSavedLayouts(updatedLayouts);
+      setActiveSavedLayoutId(existing.id);
+      setLayoutNameInput(name);
+      setStatusMessage(
+        persisted
+          ? `Updated saved layout "${name}".`
+          : `Updated saved layout "${name}" for this tab, but browser storage is unavailable so it will not persist after refresh.`,
+      );
+      setShowSaveModal(false);
+      setSaveModalInput('');
+      return;
+    }
+
+    const newLayout: SavedLayoutRecord = {
+      id: createId(),
+      name,
+      createdAt: now,
+      updatedAt: now,
+      layout: cloneLayout(layout),
+    };
+
+    const persisted = commitSavedLayouts([newLayout, ...savedLayouts]);
+    setActiveSavedLayoutId(newLayout.id);
+    setLayoutNameInput(name);
+    setStatusMessage(
+      persisted
+        ? `Saved layout "${name}" to local storage.`
+        : `Saved layout "${name}" for this tab, but browser storage is unavailable so it will not persist after refresh.`,
+    );
+    setShowSaveModal(false);
+    setSaveModalInput('');
+  };
+
+  const handleOpenSaveModal = () => {
+    setSaveModalInput(layoutNameInput || '');
+    setShowSaveModal(true);
+  };
+
+  const handleOpenLoadModal = () => {
+    setShowLoadModal(true);
+  };
+
   const handleLoadSavedLayout = (savedLayout: SavedLayoutRecord) => {
     setLayout(cloneLayout(savedLayout.layout));
     setActiveSavedLayoutId(savedLayout.id);
     setLayoutNameInput(savedLayout.name);
     setStatusMessage(`Loaded saved layout "${savedLayout.name}".`);
+    setShowLoadModal(false);
   };
 
   const handleRenameSavedLayout = (savedLayout: SavedLayoutRecord) => {
@@ -1258,18 +1331,34 @@ export function LayoutStudio() {
           </div>
 
           <div className="flex flex-wrap gap-3">
+            <div className="flex gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/5 px-1 py-1">
+              <button
+                type="button"
+                onClick={handleOpenSaveModal}
+                className="rounded-full bg-cyan-400 px-4 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
+              >
+                Save Layout
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenLoadModal}
+                className="rounded-full border border-cyan-400/40 px-4 py-1.5 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300 hover:text-white"
+              >
+                Load Layout
+              </button>
+            </div>
             <button
               type="button"
               onClick={handleExportPng}
               disabled={isExporting}
-              className="rounded-full bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isExporting ? 'Exporting…' : 'Export PNG'}
             </button>
             <button
               type="button"
               onClick={handleCopyShareUrl}
-              className="rounded-full border border-cyan-400/40 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300 hover:text-white"
+              className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-white/30 hover:bg-white/5"
             >
               Copy share URL
             </button>
@@ -1317,107 +1406,7 @@ export function LayoutStudio() {
         ) : null}
       </header>
 
-      <section className="screen-only rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-          <div className="xl:max-w-xs">
-            <div className="flex items-start justify-between gap-4 xl:flex-col xl:items-start">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Named layouts</h2>
-                <p className="mt-1 text-sm text-slate-300">
-                  Save local snapshots, reload them later, and keep alternate battlefield setups close at hand.
-                </p>
-              </div>
-              <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-slate-300">
-                {savedLayouts.length} saved
-              </span>
-            </div>
-          </div>
 
-          <div className="flex-1 space-y-4">
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-              <label className="flex flex-col gap-2 text-sm text-slate-200">
-                Saved layout name
-                <input
-                  type="text"
-                  value={layoutNameInput}
-                  onChange={(event) => setLayoutNameInput(event.target.value)}
-                  className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-base text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50"
-                  placeholder="Tournament round 2"
-                />
-              </label>
-
-              <button
-                type="button"
-                onClick={handleSaveLayout}
-                className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-100 lg:min-w-[15rem]"
-              >
-                {activeSavedLayoutId ? 'Update current saved layout' : 'Save current layout'}
-              </button>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-              {savedLayouts.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-white/10 px-4 py-5 text-sm text-slate-400 md:col-span-2 2xl:col-span-3">
-                  No named layouts yet. Your working draft still auto-saves locally.
-                </p>
-              ) : (
-                savedLayouts.map((savedLayout) => {
-                  const isActive = savedLayout.id === activeSavedLayoutId;
-
-                  return (
-                    <article
-                      key={savedLayout.id}
-                      className={`rounded-2xl border p-4 transition ${
-                        isActive
-                          ? 'border-cyan-400/60 bg-cyan-400/10'
-                          : 'border-white/10 bg-slate-950/40'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-sm font-semibold text-white">{savedLayout.name}</h3>
-                          <p className="mt-1 text-xs text-slate-400">
-                            Updated {formatUpdatedAt(savedLayout.updatedAt)}
-                          </p>
-                        </div>
-                        {isActive ? (
-                          <span className="rounded-full bg-cyan-400/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-200">
-                            Active
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
-                        <button
-                          type="button"
-                          onClick={() => handleLoadSavedLayout(savedLayout)}
-                          className="rounded-full border border-white/10 px-3 py-1.5 text-slate-100 transition hover:border-cyan-300 hover:text-white"
-                        >
-                          Load
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRenameSavedLayout(savedLayout)}
-                          className="rounded-full border border-white/10 px-3 py-1.5 text-slate-300 transition hover:border-white/25 hover:text-white"
-                        >
-                          Rename
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSavedLayout(savedLayout)}
-                          className="rounded-full border border-rose-400/20 px-3 py-1.5 text-rose-200 transition hover:border-rose-300/40 hover:bg-rose-500/10"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
 
       <section className="screen-only grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start">
         <div className="flex min-w-0 flex-col gap-6">
@@ -1656,6 +1645,154 @@ export function LayoutStudio() {
           svgRef={cleanSvgRef}
         />
       </div>
+
+      {showSaveModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setShowSaveModal(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-xl font-semibold text-white">Save Layout</h2>
+            <p className="mt-2 text-sm text-slate-300">Enter a name for this layout</p>
+            
+            <label className="mt-4 flex flex-col gap-2 text-sm text-slate-200">
+              Layout name
+              <input
+                type="text"
+                value={saveModalInput}
+                onChange={(event) => setSaveModalInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    handleSaveLayoutFromModal();
+                  } else if (event.key === 'Escape') {
+                    setShowSaveModal(false);
+                  }
+                }}
+                autoFocus
+                className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-base text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50"
+                placeholder="Tournament round 2"
+              />
+            </label>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={handleSaveLayoutFromModal}
+                className="flex-1 rounded-2xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSaveModal(false)}
+                className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/25 hover:text-white"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLoadModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setShowLoadModal(false)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-white">Load Layout</h2>
+                <p className="mt-1 text-sm text-slate-300">Choose a saved layout to load</p>
+              </div>
+              <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-slate-300">
+                {savedLayouts.length} saved
+              </span>
+            </div>
+
+            <div className="mt-4 max-h-[60vh] space-y-3 overflow-y-auto pr-2">
+              {savedLayouts.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-slate-400">
+                  No saved layouts yet. Save your current layout to get started.
+                </p>
+              ) : (
+                savedLayouts.map((savedLayout) => {
+                  const isActive = savedLayout.id === activeSavedLayoutId;
+
+                  return (
+                    <article
+                      key={savedLayout.id}
+                      className={`rounded-2xl border p-4 transition ${
+                        isActive
+                          ? 'border-cyan-400/60 bg-cyan-400/10'
+                          : 'border-white/10 bg-slate-950/40'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm font-semibold text-white">{savedLayout.name}</h3>
+                          <p className="mt-1 text-xs text-slate-400">
+                            Updated {formatUpdatedAt(savedLayout.updatedAt)}
+                          </p>
+                        </div>
+                        {isActive && (
+                          <span className="rounded-full bg-cyan-400/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-200">
+                            Active
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => handleLoadSavedLayout(savedLayout)}
+                          className="rounded-full border border-white/10 px-3 py-1.5 text-slate-100 transition hover:border-cyan-300 hover:bg-cyan-400/10 hover:text-white"
+                        >
+                          Load
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleRenameSavedLayout(savedLayout);
+                          }}
+                          className="rounded-full border border-white/10 px-3 py-1.5 text-slate-300 transition hover:border-white/25 hover:text-white"
+                        >
+                          Rename
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleDeleteSavedLayout(savedLayout);
+                          }}
+                          className="rounded-full border border-rose-400/20 px-3 py-1.5 text-rose-200 transition hover:border-rose-300/40 hover:bg-rose-500/10"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowLoadModal(false)}
+                className="rounded-2xl border border-white/10 px-6 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/25 hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
