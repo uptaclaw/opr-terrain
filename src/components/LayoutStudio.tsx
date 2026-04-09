@@ -46,6 +46,7 @@ import { AutoPlacementGenerator } from './AutoPlacementGenerator';
 import { TerrainSummaryLegend } from './TerrainSummaryLegend';
 import { OPRValidationDisplay } from './OPRValidationDisplay';
 import type { TerrainLayout } from '../terrain/types';
+import { getPieceHalfExtents, normalizeRotation } from '../lib/pieceBounds';
 import { getPrintLegendTraitText } from '../lib/printLegend';
 
 type DragState = {
@@ -90,39 +91,21 @@ const createId = () => globalThis.crypto?.randomUUID?.() ?? `layout-${Math.rando
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-const normalizeRotation = (rotation: number) => ((((rotation + 180) % 360) + 360) % 360) - 180;
 const getClockwiseAngle = (deltaX: number, deltaY: number) => (-Math.atan2(deltaY, deltaX) * 180) / Math.PI;
-
-const getRotatedBounds = (piece: TerrainPiece) => {
-  const normalized = normalizeRotation(piece.rotation);
-  const absAngle = Math.abs(normalized);
-  
-  // For rotations close to ±90°, width and height effectively swap
-  if (absAngle >= 45 && absAngle <= 135) {
-    return {
-      effectiveWidth: piece.height,
-      effectiveHeight: piece.width,
-    };
-  }
-  
-  return {
-    effectiveWidth: piece.width,
-    effectiveHeight: piece.height,
-  };
-};
 
 const clampPieceToTable = (piece: TerrainPiece, layout: LayoutState) => {
   const width = clamp(piece.width, 2, 24);
   const height = clamp(piece.height, 2, 24);
-  const { effectiveWidth, effectiveHeight } = getRotatedBounds({ ...piece, width, height });
+  const rotation = normalizeRotation(piece.rotation);
+  const { halfWidth, halfHeight } = getPieceHalfExtents({ ...piece, width, height, rotation });
 
   return {
     ...piece,
     width,
     height,
-    x: clamp(piece.x, effectiveWidth / 2, layout.table.widthInches - effectiveWidth / 2),
-    y: clamp(piece.y, effectiveHeight / 2, layout.table.heightInches - effectiveHeight / 2),
-    rotation: clamp(piece.rotation, -180, 180),
+    x: clamp(piece.x, halfWidth, Math.max(halfWidth, layout.table.widthInches - halfWidth)),
+    y: clamp(piece.y, halfHeight, Math.max(halfHeight, layout.table.heightInches - halfHeight)),
+    rotation,
   };
 };
 

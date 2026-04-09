@@ -1,6 +1,7 @@
 import { cloneLayout, createDefaultLayout } from '../data/terrainCatalog';
 import type { PlacementConfig } from '../terrain/types';
 import type { LayoutState, SavedLayoutRecord, TableSettings, TerrainPiece, TerrainTrait } from '../types/layout';
+import { getPieceHalfExtents, normalizeRotation } from './pieceBounds';
 
 export const WORKING_LAYOUT_STORAGE_KEY = 'opr-terrain.working-layout.v1';
 export const SAVED_LAYOUTS_STORAGE_KEY = 'opr-terrain.saved-layouts.v1';
@@ -35,8 +36,6 @@ const coerceString = (value: unknown, fallback: string) =>
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-const normalizeRotation = (rotation: number) => ((((rotation + 180) % 360) + 360) % 360) - 180;
-
 const getLayoutMigration = (value: unknown): LayoutMigration => {
   const source = isObject(value) ? value : {};
   const widthInches = coerceNumber(source.widthInches, DEFAULT_LAYOUT.table.widthInches, 24, 72);
@@ -59,32 +58,15 @@ const getLayoutMigration = (value: unknown): LayoutMigration => {
   return null;
 };
 
-const getRotatedBounds = (piece: TerrainPiece) => {
-  const normalized = normalizeRotation(piece.rotation);
-  const absAngle = Math.abs(normalized);
-  
-  // For rotations close to ±90°, width and height effectively swap
-  if (absAngle >= 45 && absAngle <= 135) {
-    return {
-      effectiveWidth: piece.height,
-      effectiveHeight: piece.width,
-    };
-  }
-  
-  return {
-    effectiveWidth: piece.width,
-    effectiveHeight: piece.height,
-  };
-};
-
 const clampPieceToTable = (piece: TerrainPiece, table: TableSettings): TerrainPiece => {
-  const { effectiveWidth, effectiveHeight } = getRotatedBounds(piece);
-  
+  const rotation = normalizeRotation(piece.rotation);
+  const { halfWidth, halfHeight } = getPieceHalfExtents({ ...piece, rotation });
+
   return {
     ...piece,
-    x: clamp(piece.x, effectiveWidth / 2, Math.max(effectiveWidth / 2, table.widthInches - effectiveWidth / 2)),
-    y: clamp(piece.y, effectiveHeight / 2, Math.max(effectiveHeight / 2, table.heightInches - effectiveHeight / 2)),
-    rotation: normalizeRotation(piece.rotation),
+    x: clamp(piece.x, halfWidth, Math.max(halfWidth, table.widthInches - halfWidth)),
+    y: clamp(piece.y, halfHeight, Math.max(halfHeight, table.heightInches - halfHeight)),
+    rotation,
   };
 };
 

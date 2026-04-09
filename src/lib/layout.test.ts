@@ -160,6 +160,45 @@ describe('layout helpers', () => {
     expect(loaded?.pieces[0].rotation).toBe(-45);
   });
 
+  it('clamps migrated portrait layouts using the true rotated piece footprint', () => {
+    const oldLayout = {
+      version: 1,
+      table: {
+        widthInches: 48,
+        heightInches: 72,
+        deploymentDepthInches: 12,
+        title: 'Portrait Edge Clamp',
+      },
+      pieces: [
+        {
+          id: 'edge-barricade',
+          templateId: 'barricade',
+          name: 'Edge Barricade',
+          shape: 'rect',
+          fill: '#111111',
+          stroke: '#ffffff',
+          width: 12,
+          height: 4,
+          x: 24,
+          y: 2,
+          rotation: 45,
+          traits: [],
+        },
+      ],
+    };
+
+    window.localStorage.setItem(WORKING_LAYOUT_STORAGE_KEY, JSON.stringify(oldLayout));
+
+    const loaded = loadWorkingLayout();
+    const migratedPiece = loaded?.pieces[0];
+
+    expect(loaded).not.toBeNull();
+    expect(migratedPiece).toBeDefined();
+    expect(migratedPiece?.rotation).toBe(-45);
+    expect(migratedPiece?.x).toBeCloseTo(4 * Math.SQRT2, 3);
+    expect(migratedPiece?.y).toBe(24);
+  });
+
   it('preserves non-default custom table dimensions', () => {
     const customLayout = {
       version: 1,
