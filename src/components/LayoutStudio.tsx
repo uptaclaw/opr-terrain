@@ -38,7 +38,7 @@ import {
   findClearEdgeToEdgeSightlinesForLayout,
   type EdgeToEdgeSightlineResult,
 } from '../lib/lineOfSight';
-import type { LayoutState, SavedLayoutRecord, TerrainPiece, TerrainTrait, TerrainTemplate } from '../types/layout';
+import type { LayoutState, SavedLayoutRecord, TerrainPiece, TerrainTemplate } from '../types/layout';
 import { formatInches, formatTableMeasure, getSceneSize, TABLE_SCENE_MARGIN, TableCanvas } from './TableCanvas';
 import { TERRAIN_LIBRARY_MIME_TYPE, TerrainPaletteTable } from './TerrainPaletteTable';
 import type { PieceFormData } from './TerrainPieceModal';
@@ -46,6 +46,7 @@ import { AutoPlacementGenerator } from './AutoPlacementGenerator';
 import { TerrainSummaryLegend } from './TerrainSummaryLegend';
 import { OPRValidationDisplay } from './OPRValidationDisplay';
 import type { TerrainLayout } from '../terrain/types';
+import { getPrintLegendTraitText } from '../lib/printLegend';
 
 type DragState = {
   pieceId: string;
@@ -127,19 +128,6 @@ const updateHash = (layout: LayoutState) => {
   const url = new URL(window.location.href);
   url.hash = encodeLayoutHash(layout);
   window.history.replaceState(window.history.state, '', url);
-};
-
-const categoryLabels: Record<TerrainTrait['category'], string> = {
-  cover: 'Cover',
-  movement: 'Movement',
-  los: 'LoS',
-};
-
-const categoryChipClasses: Record<TerrainTrait['category'], string> = {
-  cover: 'bg-emerald-500/15 text-emerald-200 ring-emerald-400/30 print:bg-emerald-100 print:text-emerald-900 print:ring-emerald-200',
-  movement:
-    'bg-amber-500/15 text-amber-100 ring-amber-400/30 print:bg-amber-100 print:text-amber-900 print:ring-amber-200',
-  los: 'bg-sky-500/15 text-sky-100 ring-sky-400/30 print:bg-sky-100 print:text-sky-900 print:ring-sky-200',
 };
 
 const STORAGE_WARNING_MESSAGE =
@@ -709,8 +697,14 @@ export function LayoutStudio() {
       return 'Share link ready to copy';
     }
   }, [shareUrl]);
-  const legendPieces = useMemo(
-    () => [...layout.pieces].sort((left, right) => left.name.localeCompare(right.name)),
+  const printLegendEntries = useMemo(
+    () =>
+      [...layout.pieces]
+        .sort((left, right) => left.name.localeCompare(right.name))
+        .map((piece) => ({
+          piece,
+          traitsText: getPrintLegendTraitText(piece),
+        })),
     [layout.pieces],
   );
 
@@ -1345,8 +1339,10 @@ export function LayoutStudio() {
         ) : null}
       </header>
 
-      <section className="screen-only grid gap-6 xl:grid-cols-[minmax(18rem,20rem)_minmax(0,1fr)]">
+      <section className="screen-only grid gap-6 xl:grid-cols-[minmax(18rem,20rem)_minmax(0,1fr)_minmax(20rem,24rem)] xl:items-start">
         <aside className="flex flex-col gap-6">
+          <TerrainSummaryLegend pieces={layout.pieces} className="mt-0" />
+
           <AutoPlacementGenerator
             widthInches={layout.table.widthInches}
             heightInches={layout.table.heightInches}
@@ -1516,16 +1512,6 @@ export function LayoutStudio() {
               )}
             </div>
           </section>
-
-          <TerrainPaletteTable
-            presets={resolvedPresets}
-            customPieces={customPieces}
-            onAddCustom={handleAddCustomPiece}
-            onEditPiece={handleEditPiece}
-            onDeleteCustom={handleDeleteCustomPiece}
-            onDuplicatePiece={handleDuplicatePiece}
-            onAddPieceToLayout={handleAddPiece}
-          />
         </aside>
 
         <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-4 shadow-xl shadow-slate-950/20 sm:p-6">
@@ -1569,14 +1555,25 @@ export function LayoutStudio() {
             Click a terrain piece to highlight it. Drag selected terrain to reposition it, and use
             the on-canvas rotation handle for non-round pieces.
           </div>
-
-          <div className="mt-6">
-            <TerrainSummaryLegend pieces={layout.pieces} />
-          </div>
         </section>
+
+        <aside className="flex flex-col gap-6">
+          <TerrainPaletteTable
+            presets={resolvedPresets}
+            customPieces={customPieces}
+            onAddCustom={handleAddCustomPiece}
+            onEditPiece={handleEditPiece}
+            onDeleteCustom={handleDeleteCustomPiece}
+            onDuplicatePiece={handleDuplicatePiece}
+            onAddPieceToLayout={handleAddPiece}
+          />
+        </aside>
       </section>
 
-      <section className="print-sheet rounded-3xl border border-slate-200 bg-white p-5 text-slate-900 shadow-xl shadow-slate-950/10 sm:p-6 lg:p-8">
+      <section
+        data-testid="print-sheet"
+        className="print-sheet rounded-3xl border border-slate-200 bg-white p-5 text-slate-900 shadow-xl shadow-slate-950/10 sm:p-6 lg:p-8"
+      >
         <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-700">Print preview</p>
@@ -1605,8 +1602,11 @@ export function LayoutStudio() {
           </div>
         </div>
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.85fr)] xl:items-start">
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <div className="mt-5 space-y-4 print:mt-4 print:space-y-3">
+          <div
+            data-testid="print-map"
+            className="mx-auto overflow-hidden rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4 print:max-w-[8.8in] print:rounded-2xl print:border-slate-300 print:p-2.5"
+          >
             <TableCanvas
               widthInches={layout.table.widthInches}
               heightInches={layout.table.heightInches}
@@ -1617,60 +1617,39 @@ export function LayoutStudio() {
             />
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+          <section
+            data-testid="print-terrain-legend"
+            className="rounded-2xl border border-slate-300 bg-white px-4 py-4 text-black print:border-black print:px-3 print:py-3"
+          >
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-slate-950">Terrain legend</h3>
-                <p className="mt-1 text-sm text-slate-600">
-                  Piece names plus the active cover, movement, and line-of-sight rules.
+                <h3 className="text-base font-bold tracking-[0.02em] text-black">Terrain legend</h3>
+                <p className="mt-1 text-xs text-slate-700">
+                  Terrain name plus the key rules that matter at the table. Built for black-and-white printing.
                 </p>
               </div>
-              <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold text-white">
-                {legendPieces.length} pieces
+              <span className="rounded-full border border-black bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-black">
+                {printLegendEntries.length} pieces
               </span>
             </div>
 
-            <div className="mt-5 space-y-3">
-              {legendPieces.map((piece) => {
-                const activeTraits = piece.traits.filter((trait) => trait.active);
-
-                return (
-                  <article key={piece.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h4 className="text-sm font-semibold text-slate-950">{piece.name}</h4>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {piece.templateId} · x {piece.x.toFixed(1)} / y {piece.y.toFixed(1)} · {formatInches(piece.width)} × {formatInches(piece.height)}
-                        </p>
-                      </div>
-                      <span
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border"
-                        style={{ backgroundColor: piece.fill, borderColor: piece.stroke }}
-                        aria-hidden="true"
-                      />
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {activeTraits.length > 0 ? (
-                        activeTraits.map((trait) => (
-                          <span
-                            key={`${piece.id}-${trait.id}`}
-                            className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${categoryChipClasses[trait.category]}`}
-                          >
-                            {categoryLabels[trait.category]} · {trait.label}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-inset ring-slate-200">
-                          No active traits
-                        </span>
-                      )}
-                    </div>
+            {printLegendEntries.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-700">No terrain pieces on the table.</p>
+            ) : (
+              <div className="mt-3 grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3 print:mt-2.5 print:gap-x-3 print:gap-y-1.5 print:grid-cols-3">
+                {printLegendEntries.map(({ piece, traitsText }) => (
+                  <article
+                    key={piece.id}
+                    data-testid="print-legend-item"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 print:rounded-lg print:border-slate-400 print:px-2.5 print:py-1.5"
+                  >
+                    <h4 className="text-sm font-bold leading-tight text-black">{piece.name}</h4>
+                    <p className="mt-0.5 text-xs leading-5 text-slate-700 print:leading-snug">{traitsText}</p>
                   </article>
-                );
-              })}
-            </div>
-          </div>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       </section>
 

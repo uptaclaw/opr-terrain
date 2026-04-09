@@ -118,7 +118,10 @@ export function TerrainPaletteTable({
   };
 
   return (
-    <aside className="rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-2xl shadow-cyan-950/20">
+    <aside
+      data-testid="terrain-library-panel"
+      className="rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-2xl shadow-cyan-950/20"
+    >
       <div className="space-y-2">
         <p className="text-sm uppercase tracking-[0.2em] text-cyan-300/80">Terrain Library</p>
         <h2 className="text-xl font-semibold text-white">Drag pieces onto the table</h2>

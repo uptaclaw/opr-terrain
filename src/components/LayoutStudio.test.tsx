@@ -100,8 +100,8 @@ describe('LayoutStudio', () => {
       DOMRect.fromRect({
         x: 0,
         y: 0,
-        width: 590,
-        height: 830,
+        width: 830,
+        height: 590,
       }),
     );
   });
@@ -170,13 +170,25 @@ describe('LayoutStudio', () => {
     expect(screen.getByText(/shareable URL copied to the clipboard/i)).toBeInTheDocument();
   });
 
-  it('renders a print legend with terrain piece names and active traits', () => {
+  it('renders a compact print legend below the map with names and key traits only', () => {
     render(<LayoutStudio />);
 
-    expect(screen.getByRole('heading', { name: /terrain legend/i })).toBeInTheDocument();
-    expect(screen.getAllByText(/central ruins/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/heavy cover/i).length).toBeGreaterThan(0);
+    const printMap = screen.getByTestId('print-map');
+    const printLegend = screen.getByTestId('print-terrain-legend');
+    const centralRuinsLegendItem = screen
+      .getAllByTestId('print-legend-item')
+      .find((item) => within(item).queryByText('Central Ruins', { selector: 'h4' }));
+
     expect(screen.getByText(/print preview/i)).toBeInTheDocument();
+    expect(within(printLegend).getByRole('heading', { name: /terrain legend/i })).toBeInTheDocument();
+    expect(centralRuinsLegendItem).toBeDefined();
+    expect(within(centralRuinsLegendItem!).getByText('Central Ruins', { selector: 'h4' })).toBeInTheDocument();
+    expect(
+      within(centralRuinsLegendItem!).getByText('Cover • Difficult • LoS Blocking', { selector: 'p' }),
+    ).toBeInTheDocument();
+    expect(within(printLegend).queryByText(/x\s*\d/i)).not.toBeInTheDocument();
+    expect(within(printLegend).queryByText(/″/i)).not.toBeInTheDocument();
+    expect(printMap.compareDocumentPosition(printLegend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('removes the selected piece panel and shows an on-canvas rotation handle after selection', () => {

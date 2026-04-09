@@ -59,32 +59,32 @@ const samplePieces: TerrainPiece[] = [
 ];
 
 describe('TableCanvas', () => {
-  it('renders the default 4×6 table geometry and deployment zones on the long edges', () => {
+  it('renders the default 6×4 landscape table geometry and deployment zones on the long edges', () => {
     render(<TableCanvas />);
 
     const svg = screen.getByTestId('table-canvas-svg');
-    const leftZone = screen.getByTestId('deployment-zone-left');
-    const rightZone = screen.getByTestId('deployment-zone-right');
-    const { sceneWidth, sceneHeight } = getSceneSize(48, 72);
+    const topZone = screen.getByTestId('deployment-zone-top');
+    const bottomZone = screen.getByTestId('deployment-zone-bottom');
+    const { sceneWidth, sceneHeight } = getSceneSize(72, 48);
 
     expect(screen.getByRole('img', { name: /game table canvas/i })).toBeInTheDocument();
-    expect(screen.getAllByText("4' × 6' table").length).toBeGreaterThan(0);
-    expect(screen.getByText('Width: 48"')).toBeInTheDocument();
-    expect(screen.getByText('Height: 72"')).toBeInTheDocument();
+    expect(screen.getAllByText("6' × 4' table").length).toBeGreaterThan(0);
+    expect(screen.getByText('Width: 72"')).toBeInTheDocument();
+    expect(screen.getByText('Height: 48"')).toBeInTheDocument();
     expect(svg).toHaveAttribute('viewBox', `0 0 ${sceneWidth} ${sceneHeight}`);
-    expect(leftZone).toHaveAttribute('width', '12');
-    expect(leftZone).toHaveAttribute('height', '72');
-    expect(rightZone).toHaveAttribute('width', '12');
-    expect(rightZone).toHaveAttribute('height', '72');
+    expect(topZone).toHaveAttribute('width', '72');
+    expect(topZone).toHaveAttribute('height', '12');
+    expect(bottomZone).toHaveAttribute('width', '72');
+    expect(bottomZone).toHaveAttribute('height', '12');
   });
 
-  it('switches deployment zones to the top and bottom when the long edge is horizontal', () => {
-    render(<TableCanvas widthInches={72} heightInches={48} />);
+  it('switches deployment zones to the left and right when the long edge is vertical', () => {
+    render(<TableCanvas widthInches={48} heightInches={72} />);
 
-    expect(screen.getByTestId('deployment-zone-top')).toBeInTheDocument();
-    expect(screen.getByTestId('deployment-zone-bottom')).toBeInTheDocument();
-    expect(screen.queryByTestId('deployment-zone-left')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('deployment-zone-right')).not.toBeInTheDocument();
+    expect(screen.getByTestId('deployment-zone-left')).toBeInTheDocument();
+    expect(screen.getByTestId('deployment-zone-right')).toBeInTheDocument();
+    expect(screen.queryByTestId('deployment-zone-top')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('deployment-zone-bottom')).not.toBeInTheDocument();
   });
 
   it('keeps a responsive aspect ratio wrapper', () => {
