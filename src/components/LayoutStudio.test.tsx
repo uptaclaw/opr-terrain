@@ -293,24 +293,32 @@ describe('LayoutStudio', () => {
     expect(screen.getByText(/terrain rotation updated/i)).toBeInTheDocument();
   });
 
-  it('renders the terrain summary legend and updates it when terrain is added to the layout', () => {
+  it('renders a compact summary legend and updates it when terrain is added to the layout', () => {
     render(<LayoutStudio />);
 
-    expect(screen.getByRole('heading', { name: /terrain summary legend/i })).toBeInTheDocument();
-    expect(screen.getByTestId('terrain-summary-impassable')).toHaveTextContent('1 piece');
-    expect(screen.getByTestId('terrain-summary-hard-cover')).toHaveTextContent('2 pieces');
-    expect(screen.getByTestId('terrain-summary-soft-cover')).toHaveTextContent('4 pieces');
-    expect(screen.getByTestId('terrain-summary-difficult')).toHaveTextContent('3 pieces');
-    expect(screen.getByTestId('terrain-summary-dangerous')).toHaveTextContent('0 pieces');
-    expect(screen.getByTestId('terrain-summary-elevated')).toHaveTextContent('1 piece');
-    expect(screen.getByTestId('terrain-summary-los-blocking')).toHaveTextContent('4 pieces');
+    const summary = screen.getByTestId('terrain-summary');
+
+    expect(within(summary).getByRole('heading', { name: /summary legend/i })).toBeInTheDocument();
+    expect(summary).toHaveTextContent('6 pieces');
+
+    const centralRuinsEntry = within(summary)
+      .getByText('Central Ruins', { selector: 'h4' })
+      .closest('[data-testid="terrain-summary-entry"]');
+
+    expect(centralRuinsEntry).not.toBeNull();
+    expect(within(centralRuinsEntry as HTMLElement).getByText('Cover • Difficult • LoS Blocking')).toBeInTheDocument();
 
     const bunkerRow = screen.getByTestId('library-item-bunker');
     fireEvent.click(within(bunkerRow).getByRole('button', { name: /add/i }));
 
-    expect(screen.getByTestId('terrain-summary-impassable')).toHaveTextContent('2 pieces');
-    expect(screen.getByTestId('terrain-summary-hard-cover')).toHaveTextContent('3 pieces');
-    expect(screen.getByTestId('terrain-summary-los-blocking')).toHaveTextContent('5 pieces');
+    expect(summary).toHaveTextContent('7 pieces');
+
+    const bunkerEntry = within(summary)
+      .getByText('Bunker', { selector: 'h4' })
+      .closest('[data-testid="terrain-summary-entry"]');
+
+    expect(bunkerEntry).not.toBeNull();
+    expect(within(bunkerEntry as HTMLElement).getByText('Cover • Impassable • LoS Blocking')).toBeInTheDocument();
   });
 
   it('converts and renders a default generated layout through the shipped LayoutStudio path', async () => {
