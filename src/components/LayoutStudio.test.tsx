@@ -113,16 +113,21 @@ describe('LayoutStudio', () => {
   it('saves named layouts to localStorage and reloads them after remount', () => {
     const view = render(<LayoutStudio />);
 
-    fireEvent.change(screen.getByLabelText(/saved layout name/i), {
+    fireEvent.click(screen.getByRole('button', { name: /save layout/i }));
+    fireEvent.change(screen.getByLabelText(/layout name/i), {
       target: { value: 'Practice Match' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /save current layout/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
+    expect(screen.getByText(/saved layout "practice match" to local storage/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /load layout/i }));
     expect(screen.getByText('Practice Match')).toBeInTheDocument();
 
     view.unmount();
     render(<LayoutStudio />);
 
+    fireEvent.click(screen.getByRole('button', { name: /load layout/i }));
     expect(screen.getByText('Practice Match')).toBeInTheDocument();
   });
 
@@ -134,13 +139,16 @@ describe('LayoutStudio', () => {
     expect(() => render(<LayoutStudio />)).not.toThrow();
     expect(screen.getByRole('alert')).toHaveTextContent(/browser storage is unavailable/i);
 
-    fireEvent.change(screen.getByLabelText(/saved layout name/i), {
+    fireEvent.click(screen.getByRole('button', { name: /save layout/i }));
+    fireEvent.change(screen.getByLabelText(/layout name/i), {
       target: { value: 'Practice Match' },
     });
 
-    expect(() => fireEvent.click(screen.getByRole('button', { name: /save current layout/i }))).not.toThrow();
+    expect(() => fireEvent.click(screen.getByRole('button', { name: /^save$/i }))).not.toThrow();
+    expect(screen.getByText(/saved layout "practice match" for this tab/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /load layout/i }));
     expect(screen.getByText('Practice Match')).toBeInTheDocument();
-    expect(screen.getByText(/saved layout "Practice Match" for this tab/i)).toBeInTheDocument();
   });
 
   it('keeps copy share URL button accessible and functional', async () => {
