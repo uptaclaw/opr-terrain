@@ -27,6 +27,9 @@ jobs:
       - name: Install Playwright Chromium + Linux deps
         run: npm run test:e2e:setup:linux
 
+      - name: Run unit tests (Vitest)
+        run: npm run test
+
       - name: Build production bundle
         run: npm run build
 

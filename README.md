@@ -12,6 +12,17 @@ A Vite + React + TypeScript battlefield layout planner for One Page Rules style 
 - Clean PNG export for posting layouts elsewhere
 - Print-friendly sheet with visual map plus terrain legend and active traits
 
+## Quality Assurance
+
+[![Validate & Deploy](https://github.com/uptaclaw/opr-terrain/actions/workflows/deploy.yml/badge.svg)](https://github.com/uptaclaw/opr-terrain/actions/workflows/deploy.yml)
+
+All pull requests must pass required status checks before merging:
+- ✅ Unit tests (Vitest)
+- ✅ Build validation (TypeScript + Vite)
+- ✅ End-to-end tests (Playwright)
+
+See [docs/BRANCH_PROTECTION.md](docs/BRANCH_PROTECTION.md) for details on branch protection rules and CI requirements.
+
 ## Scripts
 
 - `npm install` — install dependencies
@@ -84,18 +95,21 @@ With `nginx/default.conf` applied, the live site is served directly from the VM 
 
 ### GitHub Actions flow
 
-The workflow now validates pull requests before deploy and only publishes after the same checks pass on `main`.
+The workflow validates all pull requests and only deploys after checks pass on `main`.
 
-On every pull request to `main`, the CI job:
+**On every pull request to `main`, the CI runs:**
 
-1. installs dependencies with `npm ci`
-2. installs the Playwright Chromium browser and Linux runtime dependencies with `npm run test:e2e:setup:linux`
-3. builds the production bundle with `npm run build`
-4. starts a local preview server from the built `dist/`
-5. runs `npm run test:e2e`
-6. fails the PR if any e2e test fails
+1. Installs dependencies with `npm ci`
+2. Installs Playwright Chromium browser and Linux runtime dependencies
+3. **Runs unit tests** with `npm run test` (Vitest)
+4. **Builds the production bundle** with `npm run build` (includes TypeScript type checking)
+5. Starts a local preview server from the built `dist/`
+6. **Runs E2E tests** with `npm run test:e2e` (Playwright)
+7. Fails the PR if any tests fail or build errors occur
 
-On every push to `main`, the workflow runs the same validation first and then:
+**Pull requests cannot be merged unless all checks pass.**
+
+**On every push to `main`, after validation passes:**
 
 1. ensures `/var/www/opr-terrain` exists over SSH
 2. rsyncs `dist/` to `/var/www/opr-terrain/`
