@@ -59,12 +59,34 @@ const getLayoutMigration = (value: unknown): LayoutMigration => {
   return null;
 };
 
-const clampPieceToTable = (piece: TerrainPiece, table: TableSettings): TerrainPiece => ({
-  ...piece,
-  x: clamp(piece.x, piece.width / 2, Math.max(piece.width / 2, table.widthInches - piece.width / 2)),
-  y: clamp(piece.y, piece.height / 2, Math.max(piece.height / 2, table.heightInches - piece.height / 2)),
-  rotation: normalizeRotation(piece.rotation),
-});
+const getRotatedBounds = (piece: TerrainPiece) => {
+  const normalized = normalizeRotation(piece.rotation);
+  const absAngle = Math.abs(normalized);
+  
+  // For rotations close to ±90°, width and height effectively swap
+  if (absAngle >= 45 && absAngle <= 135) {
+    return {
+      effectiveWidth: piece.height,
+      effectiveHeight: piece.width,
+    };
+  }
+  
+  return {
+    effectiveWidth: piece.width,
+    effectiveHeight: piece.height,
+  };
+};
+
+const clampPieceToTable = (piece: TerrainPiece, table: TableSettings): TerrainPiece => {
+  const { effectiveWidth, effectiveHeight } = getRotatedBounds(piece);
+  
+  return {
+    ...piece,
+    x: clamp(piece.x, effectiveWidth / 2, Math.max(effectiveWidth / 2, table.widthInches - effectiveWidth / 2)),
+    y: clamp(piece.y, effectiveHeight / 2, Math.max(effectiveHeight / 2, table.heightInches - effectiveHeight / 2)),
+    rotation: normalizeRotation(piece.rotation),
+  };
+};
 
 const migratePieceToLandscape = (piece: TerrainPiece, migration: LayoutMigration): TerrainPiece => {
   if (migration === 'legacy-portrait-to-landscape') {

@@ -93,16 +93,35 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 const normalizeRotation = (rotation: number) => ((((rotation + 180) % 360) + 360) % 360) - 180;
 const getClockwiseAngle = (deltaX: number, deltaY: number) => (-Math.atan2(deltaY, deltaX) * 180) / Math.PI;
 
+const getRotatedBounds = (piece: TerrainPiece) => {
+  const normalized = normalizeRotation(piece.rotation);
+  const absAngle = Math.abs(normalized);
+  
+  // For rotations close to ±90°, width and height effectively swap
+  if (absAngle >= 45 && absAngle <= 135) {
+    return {
+      effectiveWidth: piece.height,
+      effectiveHeight: piece.width,
+    };
+  }
+  
+  return {
+    effectiveWidth: piece.width,
+    effectiveHeight: piece.height,
+  };
+};
+
 const clampPieceToTable = (piece: TerrainPiece, layout: LayoutState) => {
   const width = clamp(piece.width, 2, 24);
   const height = clamp(piece.height, 2, 24);
+  const { effectiveWidth, effectiveHeight } = getRotatedBounds({ ...piece, width, height });
 
   return {
     ...piece,
     width,
     height,
-    x: clamp(piece.x, width / 2, layout.table.widthInches - width / 2),
-    y: clamp(piece.y, height / 2, layout.table.heightInches - height / 2),
+    x: clamp(piece.x, effectiveWidth / 2, layout.table.widthInches - effectiveWidth / 2),
+    y: clamp(piece.y, effectiveHeight / 2, layout.table.heightInches - effectiveHeight / 2),
     rotation: clamp(piece.rotation, -180, 180),
   };
 };
@@ -1572,13 +1591,13 @@ export function LayoutStudio() {
 
       <section
         data-testid="print-sheet"
-        className="print-sheet rounded-3xl border border-slate-200 bg-white p-5 text-slate-900 shadow-xl shadow-slate-950/10 sm:p-6 lg:p-8"
+        className="print-sheet rounded-3xl border border-slate-200 bg-white p-5 text-slate-900 shadow-xl shadow-slate-950/10 sm:p-6 lg:p-8 print:p-0 print:border-0 print:shadow-none"
       >
-        <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between print:gap-2 print:pb-2 print:border-slate-300">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-700">Print preview</p>
-            <h2 className="mt-2 text-2xl font-semibold text-slate-950">{layout.table.title}</h2>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-700 print:text-[10px] print:text-slate-900">Print preview</p>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-950 print:mt-0.5 print:text-base print:font-bold">{layout.table.title}</h2>
+            <p className="mt-2 text-sm text-slate-600 print:mt-0.5 print:text-[10px]">
               {formatTableMeasure(layout.table.widthInches)} × {formatTableMeasure(layout.table.heightInches)}
               {' '}table · deployment depth {formatInches(layout.table.deploymentDepthInches)}
             </p>
@@ -1602,10 +1621,10 @@ export function LayoutStudio() {
           </div>
         </div>
 
-        <div className="mt-5 space-y-4 print:mt-4 print:space-y-3">
+        <div className="mt-5 space-y-4 print:mt-2 print:space-y-2">
           <div
             data-testid="print-map"
-            className="mx-auto overflow-hidden rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4 print:max-w-[8.8in] print:rounded-2xl print:border-slate-300 print:p-2.5"
+            className="mx-auto overflow-hidden rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4 print:max-w-[7.5in] print:rounded-lg print:border-slate-300 print:p-1.5"
           >
             <TableCanvas
               widthInches={layout.table.widthInches}
@@ -1619,16 +1638,16 @@ export function LayoutStudio() {
 
           <section
             data-testid="print-terrain-legend"
-            className="rounded-2xl border border-slate-300 bg-white px-4 py-4 text-black print:border-black print:px-3 print:py-3"
+            className="rounded-2xl border border-slate-300 bg-white px-4 py-4 text-black print:rounded-lg print:border-black print:px-2.5 print:py-2"
           >
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 print:gap-2">
               <div>
-                <h3 className="text-base font-bold tracking-[0.02em] text-black">Terrain legend</h3>
-                <p className="mt-1 text-xs text-slate-700">
+                <h3 className="text-base font-bold tracking-[0.02em] text-black print:text-sm">Terrain legend</h3>
+                <p className="mt-1 text-xs text-slate-700 print:mt-0.5 print:text-[10px] print:leading-tight">
                   Terrain name plus the key rules that matter at the table. Built for black-and-white printing.
                 </p>
               </div>
-              <span className="rounded-full border border-black bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-black">
+              <span className="rounded-full border border-black bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-black print:px-2 print:py-0.5 print:text-[9px]">
                 {printLegendEntries.length} pieces
               </span>
             </div>
@@ -1636,15 +1655,15 @@ export function LayoutStudio() {
             {printLegendEntries.length === 0 ? (
               <p className="mt-3 text-sm text-slate-700">No terrain pieces on the table.</p>
             ) : (
-              <div className="mt-3 grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3 print:mt-2.5 print:gap-x-3 print:gap-y-1.5 print:grid-cols-3">
+              <div className="mt-3 grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3 print:mt-2 print:gap-x-2.5 print:gap-y-1.5 print:grid-cols-3">
                 {printLegendEntries.map(({ piece, traitsText }) => (
                   <article
                     key={piece.id}
                     data-testid="print-legend-item"
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 print:rounded-lg print:border-slate-400 print:px-2.5 print:py-1.5"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 print:rounded-md print:border-slate-400 print:px-2 print:py-1"
                   >
-                    <h4 className="text-sm font-bold leading-tight text-black">{piece.name}</h4>
-                    <p className="mt-0.5 text-xs leading-5 text-slate-700 print:leading-snug">{traitsText}</p>
+                    <h4 className="text-sm font-bold leading-tight text-black print:text-xs">{piece.name}</h4>
+                    <p className="mt-0.5 text-xs leading-5 text-slate-700 print:text-[10px] print:leading-snug print:mt-0">{traitsText}</p>
                   </article>
                 ))}
               </div>
