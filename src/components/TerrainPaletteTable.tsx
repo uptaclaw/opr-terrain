@@ -126,12 +126,12 @@ export function TerrainPaletteTable({
         <p className="text-sm uppercase tracking-[0.2em] text-cyan-300/80">Terrain Library</p>
         <h2 className="text-xl font-semibold text-white">Drag pieces onto the table</h2>
         <p className="text-sm text-slate-300">
-          Every row can be dragged from the table to place a new terrain piece on the board.
+          Drag rows from the library onto the map or use the quick add button for instant placement.
         </p>
       </div>
 
       {/* Search and Add Button */}
-      <div className="mt-5 flex gap-3">
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
         <input
           type="text"
           placeholder="Search by name or trait..."
@@ -145,16 +145,16 @@ export function TerrainPaletteTable({
             setModalMode('create');
             setIsModalOpen(true);
           }}
-          className="whitespace-nowrap rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-600"
+          className="whitespace-nowrap rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-600 sm:self-auto"
         >
           + Add Custom
         </button>
       </div>
 
       {/* Table */}
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
+      <div className="mt-4 overflow-auto rounded-2xl border border-white/5">
+        <table className="w-full min-w-[44rem] text-left text-sm">
+          <thead className="sticky top-0 bg-slate-900/95 backdrop-blur">
             <tr className="border-b border-white/10">
               <th className="pb-2 font-semibold text-slate-300">Name</th>
               <th className="pb-2 font-semibold text-slate-300">Size</th>

@@ -128,12 +128,12 @@ export function AutoPlacementGenerator({
   const currentStrategyDescription = getStrategyDescription(placementConfig.strategy || 'random');
 
   return (
-    <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-xl">
+    <section data-testid="auto-placement-panel" className="rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-xl">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-white">Auto-Placement Generator</h2>
+          <h2 className="text-lg font-semibold text-white">Auto placement</h2>
           <p className="mt-1 text-sm text-slate-300">
-            Configure and generate terrain layouts with different strategies
+            Configure and generate terrain layouts with different strategies.
           </p>
         </div>
       </div>
