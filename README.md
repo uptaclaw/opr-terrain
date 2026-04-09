@@ -18,6 +18,8 @@ A Vite + React + TypeScript battlefield layout planner for One Page Rules style 
 - `npm run dev` — start the Vite dev server
 - `npm run build` — type-check and create a production build in `dist/`
 - `npm run test` — run the Vitest suite
+- `npm run test:e2e:setup` — install the Playwright Chromium browser locally
+- `npm run test:e2e:setup:linux` — install Chromium plus the Linux shared-library dependencies Playwright needs on fresh Ubuntu/Debian-style hosts
 - `npm run test:e2e` — run the Playwright end-to-end suite
 - `npm run test:e2e:headed` — run e2e tests with a visible browser window
 - `npm run test:e2e:ui` — open Playwright UI mode for interactive debugging
@@ -35,10 +37,14 @@ Playwright lives under `e2e/` and focuses on the highest-risk user flows that un
 
 ### Run locally
 
-Install the Chromium browser once:
+Install Playwright once before your first local run:
 
 ```bash
-npx playwright install chromium
+# macOS / Windows
+npm run test:e2e:setup
+
+# Linux (installs Chromium plus native browser libraries)
+npm run test:e2e:setup:linux
 ```
 
 Then run the suite:
@@ -46,6 +52,8 @@ Then run the suite:
 ```bash
 npm run test:e2e
 ```
+
+If you hit a Linux error like `error while loading shared libraries`, rerun the Linux setup command on a machine where Playwright can prompt for sudo or install those shared libraries separately.
 
 By default, local e2e runs start the Vite dev server automatically. If you already have a server running, Playwright reuses it.
 
@@ -81,7 +89,7 @@ The workflow now validates pull requests before deploy and only publishes after 
 On every pull request to `main`, the CI job:
 
 1. installs dependencies with `npm ci`
-2. installs the Playwright Chromium browser
+2. installs the Playwright Chromium browser and Linux runtime dependencies with `npm run test:e2e:setup:linux`
 3. builds the production bundle with `npm run build`
 4. starts a local preview server from the built `dist/`
 5. runs `npm run test:e2e`
