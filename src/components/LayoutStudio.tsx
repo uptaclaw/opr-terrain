@@ -90,6 +90,7 @@ const createId = () => globalThis.crypto?.randomUUID?.() ?? `layout-${Math.rando
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const normalizeRotation = (rotation: number) => ((((rotation + 180) % 360) + 360) % 360) - 180;
+const getClockwiseAngle = (deltaX: number, deltaY: number) => (-Math.atan2(deltaY, deltaX) * 180) / Math.PI;
 
 const clampPieceToTable = (piece: TerrainPiece, layout: LayoutState) => {
   const width = clamp(piece.width, 2, 24);
@@ -686,7 +687,7 @@ export function LayoutStudio() {
 
     const deltaX = pointer.x - activePiece.x;
     const deltaY = pointer.y - activePiece.y;
-    const currentAngle = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
+    const currentAngle = getClockwiseAngle(deltaX, deltaY);
     const angleDelta = currentAngle - rotationSession.startAngle;
 
     return {
@@ -996,7 +997,7 @@ export function LayoutStudio() {
 
     const deltaX = pointer.x - piece.x;
     const deltaY = pointer.y - piece.y;
-    const startAngle = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
+    const startAngle = getClockwiseAngle(deltaX, deltaY);
 
     rotationSessionRef.current = {
       pieceId,
