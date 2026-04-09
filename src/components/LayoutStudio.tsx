@@ -45,7 +45,6 @@ import { TERRAIN_LIBRARY_MIME_TYPE, TerrainPaletteTable } from './TerrainPalette
 import type { PieceFormData } from './TerrainPieceModal';
 import { AutoPlacementGenerator } from './AutoPlacementGenerator';
 import { TerrainSummaryLegend } from './TerrainSummaryLegend';
-import { OPRValidationDisplay } from './OPRValidationDisplay';
 import type { TerrainLayout } from '../terrain/types';
 import { getPieceHalfExtents, normalizeRotation } from '../lib/pieceBounds';
 import { getPrintLegendTraitText } from '../lib/printLegend';
@@ -1055,13 +1054,15 @@ export function LayoutStudio() {
     }
 
     const now = new Date().toISOString();
-    const existing = activeSavedLayoutId
+    const existingByName = savedLayouts.find((savedLayout) => savedLayout.name.toLowerCase() === name.toLowerCase());
+    const activeLayout = activeSavedLayoutId
       ? savedLayouts.find((savedLayout) => savedLayout.id === activeSavedLayoutId)
-      : savedLayouts.find((savedLayout) => savedLayout.name.toLowerCase() === name.toLowerCase());
+      : null;
 
-    if (existing) {
+    // If the entered name matches the currently loaded layout, update it in place
+    if (activeLayout && existingByName?.id === activeLayout.id) {
       const updatedLayouts = savedLayouts.map((savedLayout) =>
-        savedLayout.id === existing.id
+        savedLayout.id === activeLayout.id
           ? {
               ...savedLayout,
               name,
@@ -1071,7 +1072,7 @@ export function LayoutStudio() {
           : savedLayout,
       );
       const persisted = commitSavedLayouts(updatedLayouts);
-      setActiveSavedLayoutId(existing.id);
+      setActiveSavedLayoutId(activeLayout.id);
       setStatusMessage(
         persisted
           ? `Updated saved layout "${name}".`
@@ -1080,6 +1081,7 @@ export function LayoutStudio() {
       return;
     }
 
+    // If a different name is entered, always create a new saved layout
     const newLayout: SavedLayoutRecord = {
       id: createId(),
       name,
@@ -1409,8 +1411,6 @@ export function LayoutStudio() {
           </section>
 
           <TerrainSummaryLegend pieces={layout.pieces} className="mt-0" />
-
-          <OPRValidationDisplay validation={layout.oprValidation} />
         </aside>
       </section>
 

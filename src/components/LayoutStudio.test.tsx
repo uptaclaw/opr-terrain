@@ -134,6 +134,35 @@ describe('LayoutStudio', () => {
     expect(screen.getByText('Practice Match')).toBeInTheDocument();
   });
 
+  it('creates a new saved layout when entering a different name after loading an existing layout', () => {
+    render(<LayoutStudio />);
+
+    // Save first layout
+    fireEvent.click(screen.getByRole('button', { name: /save layout/i }));
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\., tournament/i), {
+      target: { value: 'Round 1' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: /^save$/i })[0]);
+    expect(screen.getByText(/saved layout "Round 1"/i)).toBeInTheDocument();
+
+    // Make a change to the layout by modifying the layout title
+    const titleInput = screen.getByRole('textbox', { name: /layout title/i }) as HTMLInputElement;
+    fireEvent.change(titleInput, { target: { value: 'Modified Layout' } });
+
+    // Save with a different name - should create a new saved layout
+    fireEvent.click(screen.getByRole('button', { name: /save layout/i }));
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\., tournament/i), {
+      target: { value: 'Round 2' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: /^save$/i })[0]);
+    expect(screen.getByText(/saved layout "Round 2"/i)).toBeInTheDocument();
+
+    // Open load modal and verify both layouts exist
+    fireEvent.click(screen.getByRole('button', { name: /load layout/i }));
+    expect(screen.getByText('Round 1')).toBeInTheDocument();
+    expect(screen.getByText('Round 2')).toBeInTheDocument();
+  });
+
   it('shows a warning instead of crashing when browser storage writes fail', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('Storage disabled');
