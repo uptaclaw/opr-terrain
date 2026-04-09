@@ -691,14 +691,6 @@ export function LayoutStudio() {
     [layout, customPieces],
   );
 
-  const shareUrlPreview = useMemo(() => {
-    try {
-      const url = new URL(shareUrl);
-      return `${url.origin}${url.pathname}#…`;
-    } catch {
-      return 'Share link ready to copy';
-    }
-  }, [shareUrl]);
   const printLegendEntries = useMemo(
     () =>
       [...layout.pieces]
@@ -1298,40 +1290,24 @@ export function LayoutStudio() {
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] lg:items-end">
-          <label className="flex flex-col gap-2 text-sm text-slate-200">
-            Layout title
-            <input
-              type="text"
-              value={layout.table.title}
-              onChange={(event) =>
-                setLayout((current) => ({
-                  ...current,
-                  table: {
-                    ...current.table,
-                    title: event.target.value,
-                  },
-                }))
-              }
-              className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-base text-white outline-none ring-0 transition placeholder:text-slate-500 focus:border-cyan-400/50"
-              placeholder="Name this battlefield"
-            />
-          </label>
-
-          <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-4 py-3 text-sm text-cyan-50">
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-semibold text-cyan-200">Live share link</p>
-              <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-100">
-                Ready
-              </span>
-            </div>
-            <p className="mt-1 text-xs text-cyan-50/80">
-              Use Copy share URL to grab the full link. The preview stays shortened so the header
-              does not turn into a wall of hash text.
-            </p>
-            <p className="mt-3 truncate font-mono text-xs text-cyan-100/90">{shareUrlPreview}</p>
-          </div>
-        </div>
+        <label className="flex flex-col gap-2 text-sm text-slate-200">
+          Layout title
+          <input
+            type="text"
+            value={layout.table.title}
+            onChange={(event) =>
+              setLayout((current) => ({
+                ...current,
+                table: {
+                  ...current.table,
+                  title: event.target.value,
+                },
+              }))
+            }
+            className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-base text-white outline-none ring-0 transition placeholder:text-slate-500 focus:border-cyan-400/50"
+            placeholder="Name this battlefield"
+          />
+        </label>
 
         <p className="text-sm text-emerald-300/90">{statusMessage}</p>
         {storageWarning ? (

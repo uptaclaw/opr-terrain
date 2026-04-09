@@ -143,7 +143,7 @@ describe('LayoutStudio', () => {
     expect(screen.getByText(/saved layout "Practice Match" for this tab/i)).toBeInTheDocument();
   });
 
-  it('keeps the full share URL out of the header while copy still uses it', async () => {
+  it('keeps copy share URL button accessible and functional', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
 
     Object.defineProperty(window.navigator, 'clipboard', {
@@ -158,8 +158,6 @@ describe('LayoutStudio', () => {
     const currentHash = window.location.hash.slice(1);
 
     expect(currentHash.length).toBeGreaterThan(0);
-    expect(screen.queryByText((content) => content.includes(currentHash))).not.toBeInTheDocument();
-    expect(screen.getByText(/use copy share url to grab the full link/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /copy share url/i }));
 
