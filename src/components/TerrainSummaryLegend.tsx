@@ -1,85 +1,70 @@
 import { useMemo } from 'react';
-import {
-  calculateTerrainSummary,
-  type TerrainSummaryCategoryId,
-} from '../lib/terrainSummary';
 import type { TerrainPiece } from '../types/layout';
+import { getPrintLegendTraitText } from '../lib/printLegend';
 
 interface TerrainSummaryLegendProps {
   pieces: TerrainPiece[];
   className?: string;
 }
 
-const accentClasses: Record<TerrainSummaryCategoryId, string> = {
-  impassable: 'border-rose-400/20 bg-rose-500/5',
-  'hard-cover': 'border-emerald-400/20 bg-emerald-500/5',
-  'soft-cover': 'border-sky-400/20 bg-sky-500/5',
-  difficult: 'border-amber-400/20 bg-amber-500/5',
-  dangerous: 'border-fuchsia-400/20 bg-fuchsia-500/5',
-  elevated: 'border-orange-400/20 bg-orange-500/5',
-  'los-blocking': 'border-cyan-400/20 bg-cyan-500/5',
-};
-
 const formatPieceCount = (count: number) => `${count} piece${count === 1 ? '' : 's'}`;
-const formatPercentage = (percentage: number) => `${percentage}%`;
 
 export function TerrainSummaryLegend({ pieces, className = '' }: TerrainSummaryLegendProps) {
-  const summary = useMemo(() => calculateTerrainSummary(pieces), [pieces]);
+  const legendEntries = useMemo(
+    () =>
+      [...pieces]
+        .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id))
+        .map((piece) => ({
+          piece,
+          traitsText: getPrintLegendTraitText(piece),
+        })),
+    [pieces],
+  );
 
   return (
     <section
       data-testid="terrain-summary"
-      className={`screen-only rounded-3xl border border-white/10 bg-slate-950/40 p-4 sm:p-5 ${className}`.trim()}
+      className={`screen-only rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20 ${className}`.trim()}
     >
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-white sm:text-lg">Terrain summary legend</h3>
+          <h2 className="text-lg font-semibold text-white">Summary legend</h2>
           <p className="mt-1 text-sm text-slate-300">
-            Counts are based on active traits across the current table layout.
+            Terrain names plus the key traits players usually need mid-game.
           </p>
         </div>
-        <span className="inline-flex w-fit rounded-full border border-white/10 bg-slate-900/80 px-3 py-1 text-xs font-semibold text-slate-200">
-          {formatPieceCount(summary.totalPieces)} total
+        <span className="rounded-full border border-white/10 bg-slate-950/70 px-3 py-1 text-xs font-semibold text-slate-200">
+          {formatPieceCount(legendEntries.length)}
         </span>
       </div>
 
-      <p className="mt-3 text-xs leading-6 text-slate-400">
-        A single piece can appear in multiple rows when it has multiple active traits, so the
-        percentages are based on total terrain pieces and can add up to more than 100%. Similar
-        labels are grouped into these buckets too, like Heavy/Light cover, rough ground, and
-        obscuring or partial line-of-sight blockers.
-      </p>
-
-      {summary.totalPieces === 0 ? (
+      {legendEntries.length === 0 ? (
         <p className="mt-4 rounded-2xl border border-dashed border-white/10 px-4 py-3 text-sm text-slate-400">
-          Add terrain from the palette to populate the summary.
+          Add terrain to the table to build the sidebar legend.
         </p>
-      ) : null}
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-        {summary.stats.map((stat) => (
-          <article
-            key={stat.id}
-            data-testid={`terrain-summary-${stat.id}`}
-            className={`rounded-2xl border p-4 ${accentClasses[stat.id]}`}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h4 className="text-sm font-semibold text-white">{stat.label}</h4>
-                <p className="mt-1 text-xs leading-5 text-slate-400">{stat.detail}</p>
+      ) : (
+        <div className="mt-4 max-h-[26rem] space-y-2 overflow-y-auto pr-1">
+          {legendEntries.map(({ piece, traitsText }) => (
+            <article
+              key={piece.id}
+              data-testid="terrain-summary-item"
+              className="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3"
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 rounded-full border border-white/15"
+                  style={{ backgroundColor: piece.fill }}
+                  aria-hidden="true"
+                />
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold text-white">{piece.name}</h3>
+                  <p className="mt-1 text-xs leading-5 text-slate-300">{traitsText}</p>
+                </div>
               </div>
-              <span className="rounded-full border border-white/10 bg-slate-950/70 px-2.5 py-1 text-xs font-semibold text-cyan-100">
-                {formatPercentage(stat.percentage)}
-              </span>
-            </div>
-
-            <div className="mt-4 flex items-end justify-between gap-3">
-              <p className="text-base font-semibold text-slate-100">{formatPieceCount(stat.count)}</p>
-              <p className="text-xs text-slate-400">of {summary.totalPieces} total</p>
-            </div>
-          </article>
-        ))}
-      </div>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

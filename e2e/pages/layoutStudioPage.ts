@@ -59,7 +59,7 @@ export class LayoutStudioPage {
   }
 
   savedLayoutCard(name: string) {
-    return this.page.locator('article').filter({ has: this.page.getByText(name, { exact: true }) }).first();
+    return this.page.getByTestId('saved-layout-entry').filter({ has: this.page.getByText(name, { exact: true }) }).first();
   }
 
   async pieceCount() {

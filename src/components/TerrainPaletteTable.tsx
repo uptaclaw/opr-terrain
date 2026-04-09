@@ -126,7 +126,7 @@ export function TerrainPaletteTable({
         <p className="text-sm uppercase tracking-[0.2em] text-cyan-300/80">Terrain Library</p>
         <h2 className="text-xl font-semibold text-white">Drag pieces onto the table</h2>
         <p className="text-sm text-slate-300">
-          Every row can be dragged from the table to place a new terrain piece on the board.
+          Drag rows from the library onto the table, or use Add for a quick placement.
         </p>
       </div>
 

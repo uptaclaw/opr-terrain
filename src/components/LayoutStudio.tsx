@@ -348,6 +348,7 @@ export function LayoutStudio() {
   const [rotatingPieceId, setRotatingPieceId] = useState<string | null>(null);
   const [activeSavedLayoutId, setActiveSavedLayoutId] = useState<string | null>(null);
   const [layoutNameInput, setLayoutNameInput] = useState('');
+  const [isSavedLayoutsModalOpen, setIsSavedLayoutsModalOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState(
     'Draft changes auto-save locally and update the share URL in the address bar.',
   );
@@ -586,6 +587,11 @@ export function LayoutStudio() {
         return;
       }
 
+      if (isSavedLayoutsModalOpen) {
+        setIsSavedLayoutsModalOpen(false);
+        return;
+      }
+
       const rotationSession = rotationSessionRef.current;
 
       if (rotationSession) {
@@ -604,11 +610,15 @@ export function LayoutStudio() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedPieceId]);
+  }, [isSavedLayoutsModalOpen, selectedPieceId]);
 
   const selectedPiece = useMemo(
     () => layout.pieces.find((piece) => piece.id === selectedPieceId) ?? null,
     [layout.pieces, selectedPieceId],
+  );
+  const activeSavedLayout = useMemo(
+    () => savedLayouts.find((savedLayout) => savedLayout.id === activeSavedLayoutId) ?? null,
+    [activeSavedLayoutId, savedLayouts],
   );
 
   const losCheckCacheKey = useMemo(() => serializeLayoutForLosCache(layout), [layout]);
@@ -691,14 +701,6 @@ export function LayoutStudio() {
     [layout, customPieces],
   );
 
-  const shareUrlPreview = useMemo(() => {
-    try {
-      const url = new URL(shareUrl);
-      return `${url.origin}${url.pathname}#…`;
-    } catch {
-      return 'Share link ready to copy';
-    }
-  }, [shareUrl]);
   const printLegendEntries = useMemo(
     () =>
       [...layout.pieces]
@@ -1060,7 +1062,14 @@ export function LayoutStudio() {
   };
 
   const handleSaveLayout = () => {
-    const name = layoutNameInput.trim();
+    const suggestedName = activeSavedLayout?.name || layoutNameInput.trim() || layout.table.title.trim() || 'Tournament layout';
+    const requestedName = window.prompt('Save layout as', suggestedName);
+
+    if (requestedName === null) {
+      return;
+    }
+
+    const name = requestedName.trim();
 
     if (!name) {
       setStatusMessage('Enter a layout name before saving.');
@@ -1068,23 +1077,53 @@ export function LayoutStudio() {
     }
 
     const now = new Date().toISOString();
-    const existing = activeSavedLayoutId
-      ? savedLayouts.find((savedLayout) => savedLayout.id === activeSavedLayoutId)
-      : savedLayouts.find((savedLayout) => savedLayout.name.toLowerCase() === name.toLowerCase());
+    const matchingLayoutByName = savedLayouts.find(
+      (savedLayout) => savedLayout.name.toLowerCase() === name.toLowerCase() && savedLayout.id !== activeSavedLayoutId,
+    );
 
-    if (existing) {
-      const updatedLayouts = savedLayouts.map((savedLayout) =>
-        savedLayout.id === existing.id
-          ? {
-              ...savedLayout,
-              name,
-              updatedAt: now,
-              layout: cloneLayout(layout),
-            }
-          : savedLayout,
+    if (activeSavedLayout) {
+      if (matchingLayoutByName) {
+        setStatusMessage(`A saved layout named "${name}" already exists. Load or delete it first.`);
+        return;
+      }
+
+      const persisted = commitSavedLayouts(
+        savedLayouts.map((savedLayout) =>
+          savedLayout.id === activeSavedLayout.id
+            ? {
+                ...savedLayout,
+                name,
+                updatedAt: now,
+                layout: cloneLayout(layout),
+              }
+            : savedLayout,
+        ),
       );
-      const persisted = commitSavedLayouts(updatedLayouts);
-      setActiveSavedLayoutId(existing.id);
+      setLayoutNameInput(name);
+      setActiveSavedLayoutId(activeSavedLayout.id);
+      setStatusMessage(
+        persisted
+          ? `Updated saved layout "${name}".`
+          : `Updated saved layout "${name}" for this tab, but browser storage is unavailable so it will not persist after refresh.`,
+      );
+      return;
+    }
+
+    if (matchingLayoutByName) {
+      const persisted = commitSavedLayouts(
+        savedLayouts.map((savedLayout) =>
+          savedLayout.id === matchingLayoutByName.id
+            ? {
+                ...savedLayout,
+                name,
+                updatedAt: now,
+                layout: cloneLayout(layout),
+              }
+            : savedLayout,
+        ),
+      );
+      setLayoutNameInput(name);
+      setActiveSavedLayoutId(matchingLayoutByName.id);
       setStatusMessage(
         persisted
           ? `Updated saved layout "${name}".`
@@ -1102,6 +1141,7 @@ export function LayoutStudio() {
     };
 
     const persisted = commitSavedLayouts([newLayout, ...savedLayouts]);
+    setLayoutNameInput(name);
     setActiveSavedLayoutId(newLayout.id);
     setStatusMessage(
       persisted
@@ -1114,38 +1154,8 @@ export function LayoutStudio() {
     setLayout(cloneLayout(savedLayout.layout));
     setActiveSavedLayoutId(savedLayout.id);
     setLayoutNameInput(savedLayout.name);
+    setIsSavedLayoutsModalOpen(false);
     setStatusMessage(`Loaded saved layout "${savedLayout.name}".`);
-  };
-
-  const handleRenameSavedLayout = (savedLayout: SavedLayoutRecord) => {
-    const nextName = window.prompt('Rename saved layout', savedLayout.name)?.trim();
-
-    if (!nextName || nextName === savedLayout.name) {
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const persisted = commitSavedLayouts(
-      savedLayouts.map((layoutRecord) =>
-        layoutRecord.id === savedLayout.id
-          ? {
-              ...layoutRecord,
-              name: nextName,
-              updatedAt: now,
-            }
-          : layoutRecord,
-      ),
-    );
-
-    if (activeSavedLayoutId === savedLayout.id) {
-      setLayoutNameInput(nextName);
-    }
-
-    setStatusMessage(
-      persisted
-        ? `Renamed saved layout to "${nextName}".`
-        : `Renamed saved layout to "${nextName}" for this tab, but browser storage is unavailable so it will not persist after refresh.`,
-    );
   };
 
   const handleDeleteSavedLayout = (savedLayout: SavedLayoutRecord) => {
@@ -1254,25 +1264,48 @@ export function LayoutStudio() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-screen-2xl flex-col gap-6 p-4 sm:p-6 lg:p-8">
-      <header className="screen-only flex flex-col gap-4 rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-2xl shadow-cyan-950/20">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-2">
-            <p className="text-sm uppercase tracking-[0.2em] text-cyan-300/80">OPR Terrain</p>
-            <h1 className="text-3xl font-semibold text-white sm:text-4xl">Layout persistence, export &amp; sharing</h1>
-            <p className="max-w-3xl text-sm text-slate-300 sm:text-base">
-              Drag terrain around the table, save named layouts to local storage, copy a shareable
-              URL, export a clean PNG, and print a legend-ready reference sheet.
-            </p>
+      <header className="screen-only flex flex-col gap-5 rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-2xl shadow-cyan-950/20">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-300/80">
+              <p className="text-cyan-300/80">OPR Terrain</p>
+              <span className="rounded-full border border-white/10 bg-slate-950/60 px-3 py-1 text-[11px] tracking-[0.12em] text-slate-300">
+                {savedLayouts.length} saved
+              </span>
+              {activeSavedLayout ? (
+                <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] tracking-[0.12em] text-cyan-100">
+                  Loaded: {activeSavedLayout.name}
+                </span>
+              ) : (
+                <span className="rounded-full border border-white/10 bg-slate-950/40 px-3 py-1 text-[11px] tracking-[0.12em] text-slate-400">
+                  Working draft
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <h1 className="text-3xl font-semibold text-white sm:text-4xl">Layout persistence, export &amp; sharing</h1>
+              <p className="max-w-3xl text-sm text-slate-300 sm:text-base">
+                Arrange terrain on the board, keep named layouts handy in the header, copy a shareable
+                URL, export a clean PNG, and print a legend-ready reference sheet.
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 xl:justify-end">
             <button
               type="button"
-              onClick={handleExportPng}
-              disabled={isExporting}
-              className="rounded-full bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={handleSaveLayout}
+              className="rounded-full bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
             >
-              {isExporting ? 'Exporting…' : 'Export PNG'}
+              Save layout
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsSavedLayoutsModalOpen(true)}
+              className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-white/30 hover:bg-white/5"
+            >
+              Load layout
             </button>
             <button
               type="button"
@@ -1280,6 +1313,14 @@ export function LayoutStudio() {
               className="rounded-full border border-cyan-400/40 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300 hover:text-white"
             >
               Copy share URL
+            </button>
+            <button
+              type="button"
+              onClick={handleExportPng}
+              disabled={isExporting}
+              className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-white/30 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isExporting ? 'Exporting…' : 'Export PNG'}
             </button>
             <button
               type="button"
@@ -1318,33 +1359,86 @@ export function LayoutStudio() {
             />
           </label>
 
-          <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-4 py-3 text-sm text-cyan-50">
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-semibold text-cyan-200">Live share link</p>
-              <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-100">
-                Ready
-              </span>
-            </div>
-            <p className="mt-1 text-xs text-cyan-50/80">
-              Use Copy share URL to grab the full link. The preview stays shortened so the header
-              does not turn into a wall of hash text.
+          <div className="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-4 text-sm text-slate-200">
+            <p className="font-semibold text-white">Named layouts</p>
+            <p className="mt-1 text-slate-300">
+              Save the current board from the header, then use Load layout to switch between local snapshots.
             </p>
-            <p className="mt-3 truncate font-mono text-xs text-cyan-100/90">{shareUrlPreview}</p>
+            <p className="mt-3 text-xs text-slate-400">
+              {activeSavedLayout
+                ? `Currently editing "${activeSavedLayout.name}".`
+                : 'No named layout loaded. Your working draft still auto-saves locally.'}
+            </p>
           </div>
         </div>
 
-        <p className="text-sm text-emerald-300/90">{statusMessage}</p>
-        {storageWarning ? (
-          <p role="alert" className="text-sm text-amber-200/90">
-            {storageWarning}
-          </p>
-        ) : null}
+        <div className="space-y-2">
+          <p className="text-sm text-emerald-300/90">{statusMessage}</p>
+          {storageWarning ? (
+            <p role="alert" className="text-sm text-amber-200/90">
+              {storageWarning}
+            </p>
+          ) : null}
+        </div>
       </header>
 
-      <section className="screen-only grid gap-6 xl:grid-cols-[minmax(18rem,20rem)_minmax(0,1fr)_minmax(20rem,24rem)] xl:items-start">
-        <aside className="flex flex-col gap-6">
-          <TerrainSummaryLegend pieces={layout.pieces} className="mt-0" />
+      <section className="screen-only grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] xl:items-start">
+        <div className="flex min-w-0 flex-col gap-6">
+          <section data-testid="interactive-table-panel" className="rounded-3xl border border-white/10 bg-slate-900/65 p-4 shadow-xl shadow-slate-950/20 sm:p-6">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Map</h2>
+                <p className="mt-1 text-sm text-slate-300">
+                  Drag terrain directly on the board. Click a piece to select it, reposition it,
+                  and rotate non-round terrain with the on-canvas handle.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-right text-sm text-slate-200">
+                <p className="font-semibold text-white">{screenLegend}</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  {layout.pieces.length} pieces · deployment depth {formatInches(layout.table.deploymentDepthInches)}
+                </p>
+              </div>
+            </div>
 
+            <div className="overflow-hidden rounded-3xl border border-white/10 bg-slate-950/70 p-3 shadow-inner shadow-slate-950/30 sm:p-4">
+              <TableCanvas
+                widthInches={layout.table.widthInches}
+                heightInches={layout.table.heightInches}
+                deploymentDepthInches={layout.table.deploymentDepthInches}
+                title={layout.table.title}
+                pieces={layout.pieces}
+                selectedPieceId={selectedPieceId}
+                svgRef={svgRef}
+                libraryDragActive={libraryDragActive}
+                clearSightlines={activeLosSightlines}
+                onCanvasMouseDown={handleCanvasMouseDown}
+                onCanvasDragOver={handleCanvasDragOver}
+                onCanvasDrop={handleCanvasDrop}
+                onPiecePointerDown={handlePiecePointerDown}
+                onPieceSelect={setSelectedPieceId}
+                onRotateHandleMouseDown={handleRotateHandleMouseDown}
+              />
+            </div>
+
+            <div className="mt-6 rounded-3xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-400">
+              Click a terrain piece to highlight it. Drag selected terrain to reposition it, and use
+              the on-canvas rotation handle for non-round pieces.
+            </div>
+          </section>
+
+          <TerrainPaletteTable
+            presets={resolvedPresets}
+            customPieces={customPieces}
+            onAddCustom={handleAddCustomPiece}
+            onEditPiece={handleEditPiece}
+            onDeleteCustom={handleDeleteCustomPiece}
+            onDuplicatePiece={handleDuplicatePiece}
+            onAddPieceToLayout={handleAddPiece}
+          />
+        </div>
+
+        <aside data-testid="layout-sidebar" className="flex min-w-0 flex-col gap-6">
           <AutoPlacementGenerator
             widthInches={layout.table.widthInches}
             heightInches={layout.table.heightInches}
@@ -1355,10 +1449,10 @@ export function LayoutStudio() {
 
           <OPRValidationDisplay validation={layout.oprValidation} />
 
-          <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
+          <section data-testid="los-check-panel" className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
             <div className="flex flex-col gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-white">Edge-to-edge LoS check</h2>
+                <h2 className="text-lg font-semibold text-white">LoS check</h2>
                 <p className="mt-1 text-sm text-slate-300">
                   Check every integer point along the opposite long edges. Any terrain piece counts
                   as blocking terrain.
@@ -1419,156 +1513,7 @@ export function LayoutStudio() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Named layouts</h2>
-                <p className="mt-1 text-sm text-slate-300">
-                  Save a local snapshot and reload it after refresh.
-                </p>
-              </div>
-              <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-slate-300">
-                {savedLayouts.length} saved
-              </span>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-3">
-              <label className="flex flex-col gap-2 text-sm text-slate-200">
-                Saved layout name
-                <input
-                  type="text"
-                  value={layoutNameInput}
-                  onChange={(event) => setLayoutNameInput(event.target.value)}
-                  className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-base text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50"
-                  placeholder="Tournament round 2"
-                />
-              </label>
-
-              <button
-                type="button"
-                onClick={handleSaveLayout}
-                className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
-              >
-                {activeSavedLayoutId ? 'Update current saved layout' : 'Save current layout'}
-              </button>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {savedLayouts.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-white/10 px-4 py-5 text-sm text-slate-400">
-                  No named layouts yet. Your working draft still auto-saves locally.
-                </p>
-              ) : (
-                savedLayouts.map((savedLayout) => {
-                  const isActive = savedLayout.id === activeSavedLayoutId;
-
-                  return (
-                    <article
-                      key={savedLayout.id}
-                      className={`rounded-2xl border p-4 transition ${
-                        isActive
-                          ? 'border-cyan-400/60 bg-cyan-400/10'
-                          : 'border-white/10 bg-slate-950/40'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-sm font-semibold text-white">{savedLayout.name}</h3>
-                          <p className="mt-1 text-xs text-slate-400">
-                            Updated {formatUpdatedAt(savedLayout.updatedAt)}
-                          </p>
-                        </div>
-                        {isActive ? (
-                          <span className="rounded-full bg-cyan-400/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-200">
-                            Active
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
-                        <button
-                          type="button"
-                          onClick={() => handleLoadSavedLayout(savedLayout)}
-                          className="rounded-full border border-white/10 px-3 py-1.5 text-slate-100 transition hover:border-cyan-300 hover:text-white"
-                        >
-                          Load
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRenameSavedLayout(savedLayout)}
-                          className="rounded-full border border-white/10 px-3 py-1.5 text-slate-300 transition hover:border-white/25 hover:text-white"
-                        >
-                          Rename
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSavedLayout(savedLayout)}
-                          className="rounded-full border border-rose-400/20 px-3 py-1.5 text-rose-200 transition hover:border-rose-300/40 hover:bg-rose-500/10"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })
-              )}
-            </div>
-          </section>
-        </aside>
-
-        <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-4 shadow-xl shadow-slate-950/20 sm:p-6">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-white">Interactive table</h2>
-              <p className="mt-1 text-sm text-slate-300">
-                Drag terrain directly on the board. Click a piece to select it, reposition it,
-                and rotate non-round terrain with the on-canvas handle.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-right text-sm text-slate-200">
-              <p className="font-semibold text-white">{screenLegend}</p>
-              <p className="mt-1 text-xs text-slate-400">
-                {layout.pieces.length} pieces · deployment depth {formatInches(layout.table.deploymentDepthInches)}
-              </p>
-            </div>
-          </div>
-
-          <div className="overflow-hidden rounded-3xl border border-white/10 bg-slate-950/70 p-3 shadow-inner shadow-slate-950/30 sm:p-4">
-            <TableCanvas
-              widthInches={layout.table.widthInches}
-              heightInches={layout.table.heightInches}
-              deploymentDepthInches={layout.table.deploymentDepthInches}
-              title={layout.table.title}
-              pieces={layout.pieces}
-              selectedPieceId={selectedPieceId}
-              svgRef={svgRef}
-              libraryDragActive={libraryDragActive}
-              clearSightlines={activeLosSightlines}
-              onCanvasMouseDown={handleCanvasMouseDown}
-              onCanvasDragOver={handleCanvasDragOver}
-              onCanvasDrop={handleCanvasDrop}
-              onPiecePointerDown={handlePiecePointerDown}
-              onPieceSelect={setSelectedPieceId}
-              onRotateHandleMouseDown={handleRotateHandleMouseDown}
-            />
-          </div>
-
-          <div className="mt-6 rounded-3xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-400">
-            Click a terrain piece to highlight it. Drag selected terrain to reposition it, and use
-            the on-canvas rotation handle for non-round pieces.
-          </div>
-        </section>
-
-        <aside className="flex flex-col gap-6">
-          <TerrainPaletteTable
-            presets={resolvedPresets}
-            customPieces={customPieces}
-            onAddCustom={handleAddCustomPiece}
-            onEditPiece={handleEditPiece}
-            onDeleteCustom={handleDeleteCustomPiece}
-            onDuplicatePiece={handleDuplicatePiece}
-            onAddPieceToLayout={handleAddPiece}
-          />
+          <TerrainSummaryLegend pieces={layout.pieces} className="mt-0" />
         </aside>
       </section>
 
@@ -1654,6 +1599,97 @@ export function LayoutStudio() {
           </section>
         </div>
       </section>
+
+      {isSavedLayoutsModalOpen ? (
+        <div
+          className="screen-only fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+          onClick={() => setIsSavedLayoutsModalOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="saved-layouts-dialog-title"
+            data-testid="saved-layout-modal"
+            className="w-full max-w-2xl overflow-hidden rounded-3xl border border-white/10 bg-slate-900 shadow-2xl shadow-slate-950/40"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4 sm:px-6">
+              <div>
+                <h2 id="saved-layouts-dialog-title" className="text-xl font-semibold text-white">
+                  Load saved layout
+                </h2>
+                <p className="mt-1 text-sm text-slate-300">
+                  Pick a named layout to load, or delete one you no longer need.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSavedLayoutsModalOpen(false)}
+                className="rounded-full border border-white/10 px-3 py-1.5 text-sm font-semibold text-slate-200 transition hover:border-white/25 hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto px-5 py-5 sm:px-6">
+              {savedLayouts.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-white/10 px-4 py-5 text-sm text-slate-400">
+                  No named layouts yet. Save one from the header to see it here.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {savedLayouts.map((savedLayout) => {
+                    const isActive = savedLayout.id === activeSavedLayoutId;
+
+                    return (
+                      <article
+                        key={savedLayout.id}
+                        data-testid="saved-layout-entry"
+                        className={`rounded-2xl border p-4 transition ${
+                          isActive
+                            ? 'border-cyan-400/60 bg-cyan-400/10'
+                            : 'border-white/10 bg-slate-950/40'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="text-base font-semibold text-white">{savedLayout.name}</h3>
+                            <p className="mt-1 text-xs text-slate-400">
+                              Updated {formatUpdatedAt(savedLayout.updatedAt)}
+                            </p>
+                          </div>
+                          {isActive ? (
+                            <span className="rounded-full bg-cyan-400/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-200">
+                              Loaded
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
+                          <button
+                            type="button"
+                            onClick={() => handleLoadSavedLayout(savedLayout)}
+                            className="rounded-full bg-white px-3 py-1.5 text-slate-950 transition hover:bg-slate-100"
+                          >
+                            Load
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSavedLayout(savedLayout)}
+                            className="rounded-full border border-rose-400/20 px-3 py-1.5 text-rose-200 transition hover:border-rose-300/40 hover:bg-rose-500/10"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="pointer-events-none absolute -left-[9999px] top-0 w-[1200px] opacity-0" aria-hidden="true">
         <TableCanvas

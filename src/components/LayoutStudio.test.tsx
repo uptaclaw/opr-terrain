@@ -111,36 +111,39 @@ describe('LayoutStudio', () => {
   });
 
   it('saves named layouts to localStorage and reloads them after remount', () => {
+    vi.spyOn(window, 'prompt').mockReturnValue('Practice Match');
+
     const view = render(<LayoutStudio />);
 
-    fireEvent.change(screen.getByLabelText(/saved layout name/i), {
-      target: { value: 'Practice Match' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: /save current layout/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save layout/i }));
 
-    expect(screen.getByText('Practice Match')).toBeInTheDocument();
+    expect(screen.getByText(/saved layout "Practice Match"/i)).toBeInTheDocument();
 
     view.unmount();
     render(<LayoutStudio />);
 
-    expect(screen.getByText('Practice Match')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /load layout/i }));
+
+    const dialog = screen.getByRole('dialog', { name: /load saved layout/i });
+    expect(within(dialog).getByText('Practice Match')).toBeInTheDocument();
   });
 
   it('shows a warning instead of crashing when browser storage writes fail', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('Storage disabled');
     });
+    vi.spyOn(window, 'prompt').mockReturnValue('Practice Match');
 
     expect(() => render(<LayoutStudio />)).not.toThrow();
     expect(screen.getByRole('alert')).toHaveTextContent(/browser storage is unavailable/i);
 
-    fireEvent.change(screen.getByLabelText(/saved layout name/i), {
-      target: { value: 'Practice Match' },
-    });
-
-    expect(() => fireEvent.click(screen.getByRole('button', { name: /save current layout/i }))).not.toThrow();
-    expect(screen.getByText('Practice Match')).toBeInTheDocument();
+    expect(() => fireEvent.click(screen.getByRole('button', { name: /save layout/i }))).not.toThrow();
     expect(screen.getByText(/saved layout "Practice Match" for this tab/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /load layout/i }));
+
+    const dialog = screen.getByRole('dialog', { name: /load saved layout/i });
+    expect(within(dialog).getByText('Practice Match')).toBeInTheDocument();
   });
 
   it('keeps the full share URL out of the header while copy still uses it', async () => {
@@ -159,7 +162,7 @@ describe('LayoutStudio', () => {
 
     expect(currentHash.length).toBeGreaterThan(0);
     expect(screen.queryByText((content) => content.includes(currentHash))).not.toBeInTheDocument();
-    expect(screen.getByText(/use copy share url to grab the full link/i)).toBeInTheDocument();
+    expect(screen.queryByText(/live share link/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /copy share url/i }));
 
@@ -295,24 +298,26 @@ describe('LayoutStudio', () => {
     expect(screen.getByText(/terrain rotation updated/i)).toBeInTheDocument();
   });
 
-  it('renders the terrain summary legend and updates it when terrain is added to the layout', () => {
+  it('renders the compact summary legend in the sidebar and updates it when terrain is added', () => {
     render(<LayoutStudio />);
 
-    expect(screen.getByRole('heading', { name: /terrain summary legend/i })).toBeInTheDocument();
-    expect(screen.getByTestId('terrain-summary-impassable')).toHaveTextContent('1 piece');
-    expect(screen.getByTestId('terrain-summary-hard-cover')).toHaveTextContent('2 pieces');
-    expect(screen.getByTestId('terrain-summary-soft-cover')).toHaveTextContent('4 pieces');
-    expect(screen.getByTestId('terrain-summary-difficult')).toHaveTextContent('3 pieces');
-    expect(screen.getByTestId('terrain-summary-dangerous')).toHaveTextContent('0 pieces');
-    expect(screen.getByTestId('terrain-summary-elevated')).toHaveTextContent('1 piece');
-    expect(screen.getByTestId('terrain-summary-los-blocking')).toHaveTextContent('4 pieces');
+    const legend = screen.getByTestId('terrain-summary');
+    const initialItems = within(legend).getAllByTestId('terrain-summary-item');
+    const centralRuinsLegendItem = initialItems.find((item) => within(item).queryByText('Central Ruins'));
+
+    expect(within(legend).getByRole('heading', { name: /summary legend/i })).toBeInTheDocument();
+    expect(centralRuinsLegendItem).toBeDefined();
+    expect(within(centralRuinsLegendItem!).getByText('Cover • Difficult • LoS Blocking')).toBeInTheDocument();
 
     const bunkerRow = screen.getByTestId('library-item-bunker');
     fireEvent.click(within(bunkerRow).getByRole('button', { name: /add/i }));
 
-    expect(screen.getByTestId('terrain-summary-impassable')).toHaveTextContent('2 pieces');
-    expect(screen.getByTestId('terrain-summary-hard-cover')).toHaveTextContent('3 pieces');
-    expect(screen.getByTestId('terrain-summary-los-blocking')).toHaveTextContent('5 pieces');
+    const updatedItems = within(legend).getAllByTestId('terrain-summary-item');
+    const bunkerLegendItem = updatedItems.find((item) => within(item).queryByText('Bunker'));
+
+    expect(updatedItems).toHaveLength(initialItems.length + 1);
+    expect(bunkerLegendItem).toBeDefined();
+    expect(within(bunkerLegendItem!).getByText('Cover • Impassable • LoS Blocking')).toBeInTheDocument();
   });
 
   it('converts and renders a default generated layout through the shipped LayoutStudio path', async () => {
