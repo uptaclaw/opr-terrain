@@ -15,7 +15,7 @@ test('copy share URL reconstructs the same layout in a fresh browser context', a
   const sharedStudio = new LayoutStudioPage(sharedPage);
 
   await sharedPage.goto(sharedUrl);
-  await expect(sharedPage.getByRole('heading', { name: /layout persistence, export & sharing/i })).toBeVisible();
+  await expect(sharedPage.getByRole('heading', { name: /layout studio/i })).toBeVisible();
 
   const sharedSignature = await sharedStudio.getLayoutSignature();
 

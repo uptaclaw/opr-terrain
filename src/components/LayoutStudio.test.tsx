@@ -113,16 +113,24 @@ describe('LayoutStudio', () => {
   it('saves named layouts to localStorage and reloads them after remount', () => {
     const view = render(<LayoutStudio />);
 
-    fireEvent.change(screen.getByLabelText(/saved layout name/i), {
+    // Open save dialog
+    fireEvent.click(screen.getByRole('button', { name: /save layout/i }));
+    
+    // Fill in the layout name
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\., tournament/i), {
       target: { value: 'Practice Match' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /save current layout/i }));
+    
+    // Click save in the dialog
+    fireEvent.click(screen.getAllByRole('button', { name: /^save$/i })[0]);
 
-    expect(screen.getByText('Practice Match')).toBeInTheDocument();
+    expect(screen.getByText(/saved layout "Practice Match"/i)).toBeInTheDocument();
 
     view.unmount();
     render(<LayoutStudio />);
 
+    // Open load modal to verify the layout is saved
+    fireEvent.click(screen.getByRole('button', { name: /load layout/i }));
     expect(screen.getByText('Practice Match')).toBeInTheDocument();
   });
 
@@ -134,12 +142,17 @@ describe('LayoutStudio', () => {
     expect(() => render(<LayoutStudio />)).not.toThrow();
     expect(screen.getByRole('alert')).toHaveTextContent(/browser storage is unavailable/i);
 
-    fireEvent.change(screen.getByLabelText(/saved layout name/i), {
+    // Open save dialog
+    fireEvent.click(screen.getByRole('button', { name: /save layout/i }));
+    
+    // Fill in the layout name
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\., tournament/i), {
       target: { value: 'Practice Match' },
     });
 
-    expect(() => fireEvent.click(screen.getByRole('button', { name: /save current layout/i }))).not.toThrow();
-    expect(screen.getByText('Practice Match')).toBeInTheDocument();
+    // Click save in the dialog
+    expect(() => fireEvent.click(screen.getAllByRole('button', { name: /^save$/i })[0])).not.toThrow();
+    
     expect(screen.getByText(/saved layout "Practice Match" for this tab/i)).toBeInTheDocument();
   });
 
@@ -159,7 +172,8 @@ describe('LayoutStudio', () => {
 
     expect(currentHash.length).toBeGreaterThan(0);
     expect(screen.queryByText((content) => content.includes(currentHash))).not.toBeInTheDocument();
-    expect(screen.getByText(/use copy share url to grab the full link/i)).toBeInTheDocument();
+    // Verify that Copy Share URL button is available
+    expect(screen.getByRole('button', { name: /copy share url/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /copy share url/i }));
 

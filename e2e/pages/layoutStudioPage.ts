@@ -47,7 +47,7 @@ export class LayoutStudioPage {
   async goto(hash?: string) {
     await this.page.goto(hash ? `/#${hash}` : '/');
     await expect(
-      this.page.getByRole('heading', { name: /layout persistence, export & sharing/i }),
+      this.page.getByRole('heading', { name: /layout studio/i }),
     ).toBeVisible();
     await expect(this.interactiveCanvas).toBeVisible();
   }

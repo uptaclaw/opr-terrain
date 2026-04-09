@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { LayoutStudioPage } from '../pages/layoutStudioPage';
 
-test('places the summary left, the library right, and keeps the print legend compact below the map', async ({ page }) => {
+test('places the map and library in left column, controls in right sidebar, and keeps the print legend compact below the map', async ({ page }) => {
   const studio = new LayoutStudioPage(page);
 
   await studio.goto();
@@ -25,8 +25,15 @@ test('places the summary left, the library right, and keeps the print legend com
     throw new Error('Expected visible layout panels and print preview boxes.');
   }
 
-  expect(summaryBox.x).toBeLessThan(mapBox.x);
-  expect(mapBox.x).toBeLessThan(libraryBox.x);
+  // New layout: Map and Library should be in the same column (left)
+  // Summary should be in the right sidebar
+  expect(mapBox.x).toBeLessThan(summaryBox.x);
+  expect(libraryBox.x).toBeLessThan(summaryBox.x);
+  
+  // Library should be below the map in the left column
+  expect(libraryBox.y).toBeGreaterThan(mapBox.y + mapBox.height - 1);
+  
+  // Print legend should be below the print map
   expect(printLegendBox.y).toBeGreaterThan(printMapBox.y + printMapBox.height - 1);
 
   await expect(printLegend).toContainText('Central Ruins');

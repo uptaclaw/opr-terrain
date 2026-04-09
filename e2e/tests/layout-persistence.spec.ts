@@ -9,19 +9,23 @@ test('saved layouts survive reloads and can be loaded back after resetting the b
 
   const savedPiece = await studio.getPieceDataByName('Bunker');
 
-  await page.getByLabel(/saved layout name/i).fill('E2E Practice Layout');
-  await page.getByRole('button', { name: /save current layout/i }).click();
+  // Open save dialog and save layout
+  await page.getByRole('button', { name: /save layout/i }).click();
+  await page.getByPlaceholder(/e\.g\., tournament/i).fill('E2E Practice Layout');
+  await page.getByRole('button', { name: /^save$/i }).click();
   await expect(page.getByText(/saved layout "E2E Practice Layout"/i)).toBeVisible();
 
   await page.reload();
-  await expect(studio.savedLayoutCard('E2E Practice Layout')).toBeVisible();
   await expect(studio.layoutPieceByName('Bunker')).toBeVisible();
 
+  // Reset the layout
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: /reset sample/i }).click();
+  await page.getByRole('button', { name: /reset/i }).click();
   await expect(studio.layoutPieceByName('Bunker')).toHaveCount(0);
 
-  await studio.savedLayoutCard('E2E Practice Layout').getByRole('button', { name: /load/i }).click();
+  // Open load modal and load the saved layout
+  await page.getByRole('button', { name: /load layout/i }).click();
+  await page.getByRole('article').filter({ hasText: 'E2E Practice Layout' }).getByRole('button', { name: /load/i }).click();
 
   const restoredPiece = await studio.getPieceDataByName('Bunker');
 
