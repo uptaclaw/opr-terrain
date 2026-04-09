@@ -60,11 +60,13 @@ input[type='range'] {
   .print-sheet {
     break-inside: avoid;
     box-shadow: none !important;
-    border-color: #cbd5e1 !important;
+    border-color: #d1d5db !important;
+    border-radius: 0 !important;
+    max-width: none !important;
   }
 
   @page {
     margin: 0.5in;
-    size: auto;
+    size: landscape;
   }
 }

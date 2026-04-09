@@ -72,19 +72,31 @@ const normalizePiece = (value: unknown): TerrainPiece | null => {
   };
 };
 
-const normalizeTable = (value: unknown): TableSettings => {
+type NormalizedTableResult = {
+  table: TableSettings;
+  legacyScaleFrom?: {
+    widthInches: number;
+    heightInches: number;
+  };
+};
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const scalePieceToTable = (
+  piece: TerrainPiece,
+  fromTable: { widthInches: number; heightInches: number },
+  toTable: TableSettings,
+): TerrainPiece => ({
+  ...piece,
+  x: clamp((piece.x / fromTable.widthInches) * toTable.widthInches, piece.width / 2, toTable.widthInches - piece.width / 2),
+  y: clamp((piece.y / fromTable.heightInches) * toTable.heightInches, piece.height / 2, toTable.heightInches - piece.height / 2),
+});
+
+const normalizeTable = (value: unknown): NormalizedTableResult => {
   const source = isObject(value) ? value : {};
-
-  // Migration: upgrade old 48x48 layouts to 48x72
-  let heightInches = coerceNumber(source.heightInches, DEFAULT_LAYOUT.table.heightInches, 24, 72);
   const widthInches = coerceNumber(source.widthInches, DEFAULT_LAYOUT.table.widthInches, 24, 72);
-  
-  // If we detect the old 48x48 default, upgrade to 48x72
-  if (widthInches === 48 && heightInches === 48) {
-    heightInches = 72;
-  }
-
-  return {
+  const heightInches = coerceNumber(source.heightInches, DEFAULT_LAYOUT.table.heightInches, 24, 72);
+  const baseTable: TableSettings = {
     widthInches,
     heightInches,
     deploymentDepthInches: coerceNumber(
@@ -94,6 +106,24 @@ const normalizeTable = (value: unknown): TableSettings => {
       24,
     ),
     title: coerceString(source.title, DEFAULT_LAYOUT.table.title),
+  };
+
+  if (widthInches === 48 && (heightInches === 48 || heightInches === 72)) {
+    return {
+      table: {
+        ...baseTable,
+        widthInches: DEFAULT_LAYOUT.table.widthInches,
+        heightInches: DEFAULT_LAYOUT.table.heightInches,
+      },
+      legacyScaleFrom: {
+        widthInches,
+        heightInches,
+      },
+    };
+  }
+
+  return {
+    table: baseTable,
   };
 };
 
@@ -164,8 +194,16 @@ export const normalizeLayout = (value: unknown): LayoutState | null => {
     return null;
   }
 
+  const normalizedTable = normalizeTable(value.table);
   const pieces = Array.isArray(value.pieces)
-    ? value.pieces.map(normalizePiece).filter((piece): piece is TerrainPiece => piece !== null)
+    ? value.pieces
+        .map(normalizePiece)
+        .filter((piece): piece is TerrainPiece => piece !== null)
+        .map((piece) =>
+          normalizedTable.legacyScaleFrom
+            ? scalePieceToTable(piece, normalizedTable.legacyScaleFrom, normalizedTable.table)
+            : piece,
+        )
     : [];
 
   const placementConfig = normalizePlacementConfig(value.placementConfig);
@@ -176,7 +214,7 @@ export const normalizeLayout = (value: unknown): LayoutState | null => {
 
   return {
     version: 1,
-    table: normalizeTable(value.table),
+    table: normalizedTable.table,
     pieces,
     ...(placementConfig && Object.keys(placementConfig).length > 0 ? { placementConfig } : {}),
     ...(customTemplates && customTemplates.length > 0 ? { customTemplates } : {}),

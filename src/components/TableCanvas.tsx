@@ -64,17 +64,20 @@ const SCREEN_COLORS = {
 } as const;
 
 const CLEAN_COLORS = {
-  label: '#0f172a',
-  axis: '#475569',
-  tableFill: '#e8f7ef',
-  tableBorder: '#0f172a',
-  deploymentFill: '#0ea5e9',
-  gridMinor: '#cbd5e1',
-  gridMajor: '#94a3b8',
+  label: '#111827',
+  axis: '#374151',
+  tableFill: '#f8fafc',
+  tableBorder: '#111827',
+  deploymentFill: '#111827',
+  gridMinor: '#d1d5db',
+  gridMajor: '#9ca3af',
   background: '#ffffff',
-  pieceText: '#0f172a',
-  selection: '#2563eb',
+  pieceText: '#111827',
+  selection: '#111827',
 } as const;
+
+const CLEAN_TERRAIN_FILL = '#f8fafc';
+const CLEAN_TERRAIN_STROKE = '#111827';
 
 const TERRAIN_STROKE = '#e2e8f0';
 const TERRAIN_LABEL_OUTLINE = '#020617';
@@ -604,10 +607,10 @@ export function TableCanvas({
                     ) : null}
 
                     <g
-                      fill={piece.fill}
-                      fillOpacity={cleanOutput ? 0.88 : 0.72}
-                      stroke={piece.stroke}
-                      strokeWidth={0.2}
+                      fill={cleanOutput ? CLEAN_TERRAIN_FILL : piece.fill}
+                      fillOpacity={cleanOutput ? 1 : 0.72}
+                      stroke={cleanOutput ? CLEAN_TERRAIN_STROKE : piece.stroke}
+                      strokeWidth={cleanOutput ? 0.24 : 0.2}
                     >
                       {renderLayoutPieceShape(piece)}
                     </g>

@@ -100,8 +100,8 @@ describe('LayoutStudio', () => {
       DOMRect.fromRect({
         x: 0,
         y: 0,
-        width: 590,
-        height: 830,
+        width: 830,
+        height: 590,
       }),
     );
   });
@@ -170,13 +170,29 @@ describe('LayoutStudio', () => {
     expect(screen.getByText(/shareable URL copied to the clipboard/i)).toBeInTheDocument();
   });
 
-  it('renders a print legend with terrain piece names and active traits', () => {
+  it('renders a compact print legend with terrain names and simplified traits only', () => {
     render(<LayoutStudio />);
 
+    const printLegend = screen.getByTestId('print-legend');
+    const centralRuinsItems = within(printLegend).getAllByText(/central ruins/i);
+
     expect(screen.getByRole('heading', { name: /terrain legend/i })).toBeInTheDocument();
-    expect(screen.getAllByText(/central ruins/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/heavy cover/i).length).toBeGreaterThan(0);
+    expect(centralRuinsItems.length).toBeGreaterThan(0);
+    expect(within(printLegend).getByText(/heavy cover • difficult • los blocking/i)).toBeInTheDocument();
+    expect(within(printLegend).queryByText(/x\s+36(\.0)?\s*\/\s*y\s+24(\.0)?/i)).not.toBeInTheDocument();
+    expect(within(printLegend).queryByText(/8"\s*×\s*6"/i)).not.toBeInTheDocument();
     expect(screen.getByText(/print preview/i)).toBeInTheDocument();
+  });
+
+  it('places the summary legend in the left column and the terrain library in the right column', () => {
+    render(<LayoutStudio />);
+
+    const leftColumn = screen.getByTestId('screen-left-column');
+    const rightColumn = screen.getByTestId('screen-right-column');
+
+    expect(within(leftColumn).getByRole('heading', { name: /terrain summary legend/i })).toBeInTheDocument();
+    expect(within(rightColumn).getByText(/terrain library/i)).toBeInTheDocument();
+    expect(within(rightColumn).getByText(/drag pieces onto the table/i)).toBeInTheDocument();
   });
 
   it('removes the selected piece panel and shows an on-canvas rotation handle after selection', () => {

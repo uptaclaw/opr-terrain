@@ -101,10 +101,10 @@ describe('lineIntersectsTerrainPiece', () => {
 });
 
 describe('edge-to-edge line of sight analysis', () => {
-  it('checks every integer point on the long edges for layout pieces', () => {
-    const result = findClearEdgeToEdgeSightlinesForLayout([], 48, 72);
+  it('checks every integer point on the long edges for landscape layout pieces', () => {
+    const result = findClearEdgeToEdgeSightlinesForLayout([], 72, 48);
 
-    expect(result.edgeOrientation).toBe('vertical');
+    expect(result.edgeOrientation).toBe('horizontal');
     expect(result.edgePointCount).toBe(73);
     expect(result.totalSightlines).toBe(73 * 73);
     expect(result.clearSightlineCount).toBe(73 * 73);

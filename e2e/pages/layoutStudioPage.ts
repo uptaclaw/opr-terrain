@@ -8,8 +8,8 @@ const TABLE_SCENE_MARGIN = {
 } as const;
 
 const DEFAULT_TABLE = {
-  widthInches: 48,
-  heightInches: 72,
+  widthInches: 72,
+  heightInches: 48,
 } as const;
 
 type TablePoint = {

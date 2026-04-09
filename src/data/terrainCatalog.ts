@@ -146,12 +146,12 @@ export const createDefaultLayout = (): LayoutState => ({
   version: 1,
   table: { ...DEFAULT_TABLE },
   pieces: [
-    createTerrainPiece(terrainCatalog[0], { x: 24, y: 36 }, { name: 'Central Ruins' }),
-    createTerrainPiece(terrainCatalog[1], { x: 15, y: 57 }, { name: 'North Woods' }),
-    createTerrainPiece(terrainCatalog[2], { x: 36, y: 55 }, { name: 'East Hill' }),
-    createTerrainPiece(terrainCatalog[3], { x: 24, y: 24 }, { name: 'Midfield Barricade', rotation: 28 }),
-    createTerrainPiece(terrainCatalog[4], { x: 11, y: 18 }, { name: 'West Bunker' }),
-    createTerrainPiece(terrainCatalog[5], { x: 37, y: 15 }, { name: 'South Crater', rotation: 12 }),
+    createTerrainPiece(terrainCatalog[0], { x: 36, y: 24 }, { name: 'Central Ruins' }),
+    createTerrainPiece(terrainCatalog[1], { x: 22.5, y: 38 }, { name: 'North Woods' }),
+    createTerrainPiece(terrainCatalog[2], { x: 54, y: 36.5 }, { name: 'East Hill' }),
+    createTerrainPiece(terrainCatalog[3], { x: 36, y: 16 }, { name: 'Midfield Barricade', rotation: 28 }),
+    createTerrainPiece(terrainCatalog[4], { x: 16.5, y: 12 }, { name: 'West Bunker' }),
+    createTerrainPiece(terrainCatalog[5], { x: 55.5, y: 10 }, { name: 'South Crater', rotation: 12 }),
   ],
 });
 

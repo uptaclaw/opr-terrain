@@ -20,11 +20,11 @@ describe('layout helpers', () => {
     vi.restoreAllMocks();
   });
 
-  it('uses the standard 4×6 table as the default layout size', () => {
+  it('uses the standard 6×4 table as the default layout size', () => {
     const layout = createDefaultLayout();
 
-    expect(layout.table.widthInches).toBe(48);
-    expect(layout.table.heightInches).toBe(72);
+    expect(layout.table.widthInches).toBe(72);
+    expect(layout.table.heightInches).toBe(48);
     expect(layout.table.deploymentDepthInches).toBe(12);
   });
 
@@ -81,17 +81,31 @@ describe('layout helpers', () => {
     expect(loadSavedLayouts().map((savedLayout) => savedLayout.name)).toEqual(['Bravo', 'Alpha']);
   });
 
-  it('migrates old 48×48 layouts to 48×72 when loading from storage', () => {
-    // Simulate old layout with 48×48 dimensions
+  it('migrates old 48×48 layouts to the new 72×48 landscape table', () => {
     const oldLayout = {
       version: 1,
       table: {
         widthInches: 48,
-        heightInches: 48, // Old dimension
+        heightInches: 48,
         deploymentDepthInches: 12,
         title: 'Old 48x48 Layout',
       },
-      pieces: [],
+      pieces: [
+        {
+          id: 'legacy-piece',
+          templateId: 'legacy-piece',
+          name: 'Legacy Piece',
+          shape: 'rect',
+          fill: '#475569',
+          stroke: '#f8fafc',
+          width: 8,
+          height: 6,
+          x: 24,
+          y: 24,
+          rotation: 0,
+          traits: [],
+        },
+      ],
     };
 
     window.localStorage.setItem(WORKING_LAYOUT_STORAGE_KEY, JSON.stringify(oldLayout));
@@ -99,9 +113,49 @@ describe('layout helpers', () => {
     const loaded = loadWorkingLayout();
 
     expect(loaded).not.toBeNull();
-    expect(loaded?.table.widthInches).toBe(48);
-    expect(loaded?.table.heightInches).toBe(72); // Migrated to 72
+    expect(loaded?.table.widthInches).toBe(72);
+    expect(loaded?.table.heightInches).toBe(48);
     expect(loaded?.table.title).toBe('Old 48x48 Layout');
+    expect(loaded?.pieces[0]?.x).toBe(36);
+    expect(loaded?.pieces[0]?.y).toBe(24);
+  });
+
+  it('migrates legacy 48×72 layouts to 72×48 and rescales terrain positions', () => {
+    const oldLayout = {
+      version: 1,
+      table: {
+        widthInches: 48,
+        heightInches: 72,
+        deploymentDepthInches: 12,
+        title: 'Old Portrait Layout',
+      },
+      pieces: [
+        {
+          id: 'legacy-piece',
+          templateId: 'legacy-piece',
+          name: 'Legacy Piece',
+          shape: 'rect',
+          fill: '#475569',
+          stroke: '#f8fafc',
+          width: 8,
+          height: 6,
+          x: 24,
+          y: 36,
+          rotation: 0,
+          traits: [],
+        },
+      ],
+    };
+
+    window.localStorage.setItem(WORKING_LAYOUT_STORAGE_KEY, JSON.stringify(oldLayout));
+
+    const loaded = loadWorkingLayout();
+
+    expect(loaded).not.toBeNull();
+    expect(loaded?.table.widthInches).toBe(72);
+    expect(loaded?.table.heightInches).toBe(48);
+    expect(loaded?.pieces[0]?.x).toBe(36);
+    expect(loaded?.pieces[0]?.y).toBe(24);
   });
 
   it('preserves non-48×48 custom table dimensions', () => {
