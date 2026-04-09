@@ -91,6 +91,43 @@ const getCustomLibraryRows = () =>
     .getAllByTestId(/^library-item-/)
     .filter((row) => within(row).queryByRole('button', { name: /delete/i }));
 
+const getLayoutTitleInput = () => screen.getByRole('textbox', { name: /layout title/i }) as HTMLInputElement;
+
+const openSaveLayoutDialog = () => {
+  fireEvent.click(screen.getByRole('button', { name: /save layout/i }));
+  return screen.getByRole('dialog', { name: /save layout/i });
+};
+
+const saveLayoutAs = (name: string) => {
+  const dialog = openSaveLayoutDialog();
+
+  fireEvent.change(within(dialog).getByPlaceholderText(/e\.g\., tournament/i), {
+    target: { value: name },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: /^save$/i }));
+};
+
+const openLoadLayoutDialog = () => {
+  fireEvent.click(screen.getByRole('button', { name: /load layout/i }));
+  return screen.getByRole('dialog', { name: /load saved layout/i });
+};
+
+const getSavedLayoutCard = (dialog: HTMLElement, name: string) => {
+  const savedLayoutName = within(dialog).getByText(name, { selector: 'h3' });
+  const card = savedLayoutName.closest('article');
+
+  expect(card).not.toBeNull();
+
+  return card as HTMLElement;
+};
+
+const loadSavedLayout = (name: string) => {
+  const dialog = openLoadLayoutDialog();
+  const card = getSavedLayoutCard(dialog, name);
+
+  fireEvent.click(within(card).getByRole('button', { name: /load/i }));
+};
+
 describe('LayoutStudio', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -113,54 +150,76 @@ describe('LayoutStudio', () => {
   it('saves named layouts to localStorage and reloads them after remount', () => {
     const view = render(<LayoutStudio />);
 
-    // Open save dialog
-    fireEvent.click(screen.getByRole('button', { name: /save layout/i }));
-    
-    // Fill in the layout name
-    fireEvent.change(screen.getByPlaceholderText(/e\.g\., tournament/i), {
-      target: { value: 'Practice Match' },
-    });
-    
-    // Click save in the dialog
-    fireEvent.click(screen.getAllByRole('button', { name: /^save$/i })[0]);
+    saveLayoutAs('Practice Match');
 
     expect(screen.getByText(/saved layout "Practice Match"/i)).toBeInTheDocument();
 
     view.unmount();
     render(<LayoutStudio />);
 
-    // Open load modal to verify the layout is saved
-    fireEvent.click(screen.getByRole('button', { name: /load layout/i }));
-    expect(screen.getByText('Practice Match')).toBeInTheDocument();
+    const loadDialog = openLoadLayoutDialog();
+
+    expect(within(loadDialog).getByText('Practice Match', { selector: 'h3' })).toBeInTheDocument();
   });
 
-  it('creates a new saved layout when entering a different name after loading an existing layout', () => {
+  it('updates the active saved layout when saving again with the same name', () => {
     render(<LayoutStudio />);
 
-    // Save first layout
-    fireEvent.click(screen.getByRole('button', { name: /save layout/i }));
-    fireEvent.change(screen.getByPlaceholderText(/e\.g\., tournament/i), {
-      target: { value: 'Round 1' },
-    });
-    fireEvent.click(screen.getAllByRole('button', { name: /^save$/i })[0]);
-    expect(screen.getByText(/saved layout "Round 1"/i)).toBeInTheDocument();
+    saveLayoutAs('Round 1');
 
-    // Make a change to the layout by modifying the layout title
-    const titleInput = screen.getByRole('textbox', { name: /layout title/i }) as HTMLInputElement;
-    fireEvent.change(titleInput, { target: { value: 'Modified Layout' } });
+    fireEvent.change(getLayoutTitleInput(), { target: { value: 'Updated Round 1 Board' } });
 
-    // Save with a different name - should create a new saved layout
-    fireEvent.click(screen.getByRole('button', { name: /save layout/i }));
-    fireEvent.change(screen.getByPlaceholderText(/e\.g\., tournament/i), {
+    const saveDialog = openSaveLayoutDialog();
+
+    expect(within(saveDialog).getByDisplayValue('Round 1')).toBeInTheDocument();
+    fireEvent.click(within(saveDialog).getByRole('button', { name: /^save$/i }));
+
+    expect(screen.getByText(/updated saved layout "Round 1"/i)).toBeInTheDocument();
+
+    fireEvent.change(getLayoutTitleInput(), { target: { value: 'Working Copy' } });
+
+    const loadDialog = openLoadLayoutDialog();
+
+    expect(within(loadDialog).getAllByText('Round 1', { selector: 'h3' })).toHaveLength(1);
+
+    const round1Card = getSavedLayoutCard(loadDialog, 'Round 1');
+    fireEvent.click(within(round1Card).getByRole('button', { name: /load/i }));
+
+    expect(getLayoutTitleInput().value).toBe('Updated Round 1 Board');
+  });
+
+  it('creates a new saved layout when saving an active layout under a different name', () => {
+    render(<LayoutStudio />);
+
+    const originalTitle = getLayoutTitleInput().value;
+
+    saveLayoutAs('Round 1');
+
+    fireEvent.change(getLayoutTitleInput(), { target: { value: 'Round 2 Board' } });
+
+    const saveDialog = openSaveLayoutDialog();
+
+    expect(within(saveDialog).getByDisplayValue('Round 1')).toBeInTheDocument();
+    fireEvent.change(within(saveDialog).getByPlaceholderText(/e\.g\., tournament/i), {
       target: { value: 'Round 2' },
     });
-    fireEvent.click(screen.getAllByRole('button', { name: /^save$/i })[0]);
+    fireEvent.click(within(saveDialog).getByRole('button', { name: /^save$/i }));
+
     expect(screen.getByText(/saved layout "Round 2"/i)).toBeInTheDocument();
 
-    // Open load modal and verify both layouts exist
-    fireEvent.click(screen.getByRole('button', { name: /load layout/i }));
-    expect(screen.getByText('Round 1')).toBeInTheDocument();
-    expect(screen.getByText('Round 2')).toBeInTheDocument();
+    const loadDialog = openLoadLayoutDialog();
+
+    expect(within(loadDialog).getByText('Round 1', { selector: 'h3' })).toBeInTheDocument();
+    expect(within(loadDialog).getByText('Round 2', { selector: 'h3' })).toBeInTheDocument();
+
+    const round1Card = getSavedLayoutCard(loadDialog, 'Round 1');
+    fireEvent.click(within(round1Card).getByRole('button', { name: /load/i }));
+
+    expect(getLayoutTitleInput().value).toBe(originalTitle);
+
+    loadSavedLayout('Round 2');
+
+    expect(getLayoutTitleInput().value).toBe('Round 2 Board');
   });
 
   it('shows a warning instead of crashing when browser storage writes fail', () => {
@@ -171,17 +230,8 @@ describe('LayoutStudio', () => {
     expect(() => render(<LayoutStudio />)).not.toThrow();
     expect(screen.getByRole('alert')).toHaveTextContent(/browser storage is unavailable/i);
 
-    // Open save dialog
-    fireEvent.click(screen.getByRole('button', { name: /save layout/i }));
-    
-    // Fill in the layout name
-    fireEvent.change(screen.getByPlaceholderText(/e\.g\., tournament/i), {
-      target: { value: 'Practice Match' },
-    });
+    expect(() => saveLayoutAs('Practice Match')).not.toThrow();
 
-    // Click save in the dialog
-    expect(() => fireEvent.click(screen.getAllByRole('button', { name: /^save$/i })[0])).not.toThrow();
-    
     expect(screen.getByText(/saved layout "Practice Match" for this tab/i)).toBeInTheDocument();
   });
 

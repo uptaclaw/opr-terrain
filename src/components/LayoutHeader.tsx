@@ -148,10 +148,13 @@ export function LayoutHeader({
           onClick={() => setShowSaveDialog(false)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="save-layout-dialog-title"
             className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-xl font-semibold text-white">Save Layout</h2>
+            <h2 id="save-layout-dialog-title" className="text-xl font-semibold text-white">Save Layout</h2>
             <p className="mt-2 text-sm text-slate-300">
               Enter a name for this layout. It will be saved to browser storage.
             </p>
@@ -204,12 +207,15 @@ export function LayoutHeader({
           onClick={() => setShowLoadModal(false)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="load-layout-dialog-title"
             className="w-full max-w-2xl rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-xl font-semibold text-white">Load Saved Layout</h2>
+                <h2 id="load-layout-dialog-title" className="text-xl font-semibold text-white">Load Saved Layout</h2>
                 <p className="mt-2 text-sm text-slate-300">
                   Select a layout to load. Your current work will be replaced.
                 </p>

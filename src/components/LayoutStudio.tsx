@@ -87,6 +87,8 @@ const formatUpdatedAt = (value: string) => {
 const sortSavedLayouts = (layouts: SavedLayoutRecord[]) =>
   [...layouts].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 
+const normalizeLayoutName = (name: string) => name.trim().toLocaleLowerCase();
+
 const createId = () => globalThis.crypto?.randomUUID?.() ?? `layout-${Math.random().toString(36).slice(2, 10)}`;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -1048,24 +1050,28 @@ export function LayoutStudio() {
   };
 
   const handleSaveLayout = (name: string) => {
-    if (!name.trim()) {
+    const nextName = name.trim();
+
+    if (!nextName) {
       setStatusMessage('Enter a layout name before saving.');
       return;
     }
 
     const now = new Date().toISOString();
-    const existingByName = savedLayouts.find((savedLayout) => savedLayout.name.toLowerCase() === name.toLowerCase());
+    const normalizedNextName = normalizeLayoutName(nextName);
     const activeLayout = activeSavedLayoutId
       ? savedLayouts.find((savedLayout) => savedLayout.id === activeSavedLayoutId)
       : null;
+    const isUpdatingActiveLayout = activeLayout
+      ? normalizeLayoutName(activeLayout.name) === normalizedNextName
+      : false;
 
-    // If the entered name matches the currently loaded layout, update it in place
-    if (activeLayout && existingByName?.id === activeLayout.id) {
+    if (activeLayout && isUpdatingActiveLayout) {
       const updatedLayouts = savedLayouts.map((savedLayout) =>
         savedLayout.id === activeLayout.id
           ? {
               ...savedLayout,
-              name,
+              name: nextName,
               updatedAt: now,
               layout: cloneLayout(layout),
             }
@@ -1075,16 +1081,15 @@ export function LayoutStudio() {
       setActiveSavedLayoutId(activeLayout.id);
       setStatusMessage(
         persisted
-          ? `Updated saved layout "${name}".`
-          : `Updated saved layout "${name}" for this tab, but browser storage is unavailable so it will not persist after refresh.`,
+          ? `Updated saved layout "${nextName}".`
+          : `Updated saved layout "${nextName}" for this tab, but browser storage is unavailable so it will not persist after refresh.`,
       );
       return;
     }
 
-    // If a different name is entered, always create a new saved layout
     const newLayout: SavedLayoutRecord = {
       id: createId(),
-      name,
+      name: nextName,
       createdAt: now,
       updatedAt: now,
       layout: cloneLayout(layout),
@@ -1094,8 +1099,8 @@ export function LayoutStudio() {
     setActiveSavedLayoutId(newLayout.id);
     setStatusMessage(
       persisted
-        ? `Saved layout "${name}" to local storage.`
-        : `Saved layout "${name}" for this tab, but browser storage is unavailable so it will not persist after refresh.`,
+        ? `Saved layout "${nextName}" to local storage.`
+        : `Saved layout "${nextName}" for this tab, but browser storage is unavailable so it will not persist after refresh.`,
     );
   };
 
@@ -1337,7 +1342,7 @@ export function LayoutStudio() {
           </section>
         </div>
 
-        <aside className="flex flex-col gap-6">
+        <aside data-testid="layout-sidebar" className="flex flex-col gap-6">
           <AutoPlacementGenerator
             widthInches={layout.table.widthInches}
             heightInches={layout.table.heightInches}
@@ -1346,7 +1351,10 @@ export function LayoutStudio() {
             initialConfig={layout.placementConfig}
           />
 
-          <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20">
+          <section
+            data-testid="los-check-panel"
+            className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20"
+          >
             <div className="flex flex-col gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-white">Edge-to-edge LoS check</h2>
