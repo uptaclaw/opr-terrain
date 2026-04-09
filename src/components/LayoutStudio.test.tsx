@@ -197,14 +197,13 @@ describe('LayoutStudio', () => {
     expect(screen.queryByText(/^selected piece$/i)).not.toBeInTheDocument();
   });
 
-  it('changes the selected piece rotation when the on-canvas handle is dragged', async () => {
+  it('rotates clockwise when the on-canvas handle is dragged from top to right', async () => {
     render(<LayoutStudio />);
 
     const [interactiveCanvas] = screen.getAllByTestId('table-canvas-svg');
     const centralRuins = interactiveCanvas.querySelector(
       '[data-testid="layout-terrain-piece"][data-piece-name="Central Ruins"]',
     ) as SVGElement;
-    const initialRotation = Number(centralRuins.getAttribute('data-piece-rotation'));
     const defaultLayout = createDefaultLayout();
     const selectedPiece = defaultLayout.pieces.find((piece) => piece.name === 'Central Ruins');
 
@@ -232,7 +231,51 @@ describe('LayoutStudio', () => {
       ) as SVGElement;
       const rotatedRotation = Number(rotatedPiece.getAttribute('data-piece-rotation'));
 
-      expect(Math.abs(rotatedRotation - initialRotation)).toBeGreaterThan(5);
+      expect(rotatedRotation).toBeGreaterThan(70);
+      expect(rotatedRotation).toBeLessThan(110);
+    });
+
+    fireEvent.mouseUp(window, endPoint);
+
+    expect(screen.getByText(/terrain rotation updated/i)).toBeInTheDocument();
+  });
+
+  it('rotates counterclockwise when the on-canvas handle is dragged from top to left', async () => {
+    render(<LayoutStudio />);
+
+    const [interactiveCanvas] = screen.getAllByTestId('table-canvas-svg');
+    const centralRuins = interactiveCanvas.querySelector(
+      '[data-testid="layout-terrain-piece"][data-piece-name="Central Ruins"]',
+    ) as SVGElement;
+    const defaultLayout = createDefaultLayout();
+    const selectedPiece = defaultLayout.pieces.find((piece) => piece.name === 'Central Ruins');
+
+    expect(selectedPiece).toBeDefined();
+
+    fireEvent.click(centralRuins);
+
+    const handle = screen.getByTestId('rotation-handle');
+    const handleOffset = Math.max(selectedPiece!.width, selectedPiece!.height) / 2 + 2.4;
+    const startPoint = clientPoint(
+      selectedPiece!.x,
+      defaultLayout.table.heightInches - selectedPiece!.y - handleOffset,
+    );
+    const endPoint = clientPoint(selectedPiece!.x - handleOffset, defaultLayout.table.heightInches - selectedPiece!.y);
+
+    fireEvent.mouseDown(handle, {
+      button: 0,
+      ...startPoint,
+    });
+    fireEvent.mouseMove(window, endPoint);
+
+    await waitFor(() => {
+      const rotatedPiece = interactiveCanvas.querySelector(
+        '[data-testid="layout-terrain-piece"][data-piece-name="Central Ruins"]',
+      ) as SVGElement;
+      const rotatedRotation = Number(rotatedPiece.getAttribute('data-piece-rotation'));
+
+      expect(rotatedRotation).toBeLessThan(-70);
+      expect(rotatedRotation).toBeGreaterThan(-110);
     });
 
     fireEvent.mouseUp(window, endPoint);
