@@ -20,11 +20,11 @@ describe('layout helpers', () => {
     vi.restoreAllMocks();
   });
 
-  it('uses the standard 4×6 table as the default layout size', () => {
+  it('uses the standard 6×4 landscape table as the default layout size', () => {
     const layout = createDefaultLayout();
 
-    expect(layout.table.widthInches).toBe(48);
-    expect(layout.table.heightInches).toBe(72);
+    expect(layout.table.widthInches).toBe(72);
+    expect(layout.table.heightInches).toBe(48);
     expect(layout.table.deploymentDepthInches).toBe(12);
   });
 
@@ -81,17 +81,31 @@ describe('layout helpers', () => {
     expect(loadSavedLayouts().map((savedLayout) => savedLayout.name)).toEqual(['Bravo', 'Alpha']);
   });
 
-  it('migrates old 48×48 layouts to 48×72 when loading from storage', () => {
-    // Simulate old layout with 48×48 dimensions
+  it('migrates old 48×48 layouts to the new 72×48 landscape canvas', () => {
     const oldLayout = {
       version: 1,
       table: {
         widthInches: 48,
-        heightInches: 48, // Old dimension
+        heightInches: 48,
         deploymentDepthInches: 12,
         title: 'Old 48x48 Layout',
       },
-      pieces: [],
+      pieces: [
+        {
+          id: 'old-center',
+          templateId: 'custom',
+          name: 'Old Centerpiece',
+          shape: 'rect',
+          fill: '#111111',
+          stroke: '#ffffff',
+          width: 8,
+          height: 6,
+          x: 24,
+          y: 24,
+          rotation: 0,
+          traits: [],
+        },
+      ],
     };
 
     window.localStorage.setItem(WORKING_LAYOUT_STORAGE_KEY, JSON.stringify(oldLayout));
@@ -99,12 +113,93 @@ describe('layout helpers', () => {
     const loaded = loadWorkingLayout();
 
     expect(loaded).not.toBeNull();
-    expect(loaded?.table.widthInches).toBe(48);
-    expect(loaded?.table.heightInches).toBe(72); // Migrated to 72
+    expect(loaded?.table.widthInches).toBe(72);
+    expect(loaded?.table.heightInches).toBe(48);
     expect(loaded?.table.title).toBe('Old 48x48 Layout');
+    expect(loaded?.pieces[0].x).toBe(36);
+    expect(loaded?.pieces[0].y).toBe(24);
   });
 
-  it('preserves non-48×48 custom table dimensions', () => {
+  it('rotates old 48×72 layouts into the new 72×48 landscape orientation', () => {
+    const oldLayout = {
+      version: 1,
+      table: {
+        widthInches: 48,
+        heightInches: 72,
+        deploymentDepthInches: 12,
+        title: 'Old Portrait Layout',
+      },
+      pieces: [
+        {
+          id: 'old-ruins',
+          templateId: 'ruins',
+          name: 'Old Ruins',
+          shape: 'rect',
+          fill: '#111111',
+          stroke: '#ffffff',
+          width: 8,
+          height: 6,
+          x: 18,
+          y: 54,
+          rotation: 45,
+          traits: [],
+        },
+      ],
+    };
+
+    window.localStorage.setItem(WORKING_LAYOUT_STORAGE_KEY, JSON.stringify(oldLayout));
+
+    const loaded = loadWorkingLayout();
+
+    expect(loaded).not.toBeNull();
+    expect(loaded?.table.widthInches).toBe(72);
+    expect(loaded?.table.heightInches).toBe(48);
+    expect(loaded?.table.title).toBe('Old Portrait Layout');
+    expect(loaded?.pieces[0].x).toBe(54);
+    expect(loaded?.pieces[0].y).toBe(30);
+    expect(loaded?.pieces[0].rotation).toBe(-45);
+  });
+
+  it('clamps migrated portrait layouts using the true rotated piece footprint', () => {
+    const oldLayout = {
+      version: 1,
+      table: {
+        widthInches: 48,
+        heightInches: 72,
+        deploymentDepthInches: 12,
+        title: 'Portrait Edge Clamp',
+      },
+      pieces: [
+        {
+          id: 'edge-barricade',
+          templateId: 'barricade',
+          name: 'Edge Barricade',
+          shape: 'rect',
+          fill: '#111111',
+          stroke: '#ffffff',
+          width: 12,
+          height: 4,
+          x: 24,
+          y: 2,
+          rotation: 45,
+          traits: [],
+        },
+      ],
+    };
+
+    window.localStorage.setItem(WORKING_LAYOUT_STORAGE_KEY, JSON.stringify(oldLayout));
+
+    const loaded = loadWorkingLayout();
+    const migratedPiece = loaded?.pieces[0];
+
+    expect(loaded).not.toBeNull();
+    expect(migratedPiece).toBeDefined();
+    expect(migratedPiece?.rotation).toBe(-45);
+    expect(migratedPiece?.x).toBeCloseTo(4 * Math.SQRT2, 3);
+    expect(migratedPiece?.y).toBe(24);
+  });
+
+  it('preserves non-default custom table dimensions', () => {
     const customLayout = {
       version: 1,
       table: {
@@ -122,7 +217,7 @@ describe('layout helpers', () => {
 
     expect(loaded).not.toBeNull();
     expect(loaded?.table.widthInches).toBe(36);
-    expect(loaded?.table.heightInches).toBe(48); // Not migrated, different from 48×48
+    expect(loaded?.table.heightInches).toBe(48);
   });
 
   it('fails gracefully when the working draft cannot be persisted', () => {

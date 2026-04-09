@@ -1,11 +1,22 @@
 import { cloneLayout, createDefaultLayout } from '../data/terrainCatalog';
 import type { PlacementConfig } from '../terrain/types';
 import type { LayoutState, SavedLayoutRecord, TableSettings, TerrainPiece, TerrainTrait } from '../types/layout';
+import { getPieceHalfExtents, normalizeRotation } from './pieceBounds';
 
 export const WORKING_LAYOUT_STORAGE_KEY = 'opr-terrain.working-layout.v1';
 export const SAVED_LAYOUTS_STORAGE_KEY = 'opr-terrain.saved-layouts.v1';
 
 const DEFAULT_LAYOUT = createDefaultLayout();
+const LEGACY_PORTRAIT_TABLE = {
+  widthInches: 48,
+  heightInches: 72,
+} as const;
+const LEGACY_SQUARE_TABLE = {
+  widthInches: 48,
+  heightInches: 48,
+} as const;
+
+type LayoutMigration = 'legacy-square-to-landscape' | 'legacy-portrait-to-landscape' | null;
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
@@ -22,6 +33,62 @@ const coerceNumber = (value: unknown, fallback: number, min = 0, max = Number.PO
 
 const coerceString = (value: unknown, fallback: string) =>
   typeof value === 'string' && value.trim().length > 0 ? value : fallback;
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const getLayoutMigration = (value: unknown): LayoutMigration => {
+  const source = isObject(value) ? value : {};
+  const widthInches = coerceNumber(source.widthInches, DEFAULT_LAYOUT.table.widthInches, 24, 72);
+  const heightInches = coerceNumber(source.heightInches, DEFAULT_LAYOUT.table.heightInches, 24, 72);
+
+  if (
+    widthInches === LEGACY_SQUARE_TABLE.widthInches &&
+    heightInches === LEGACY_SQUARE_TABLE.heightInches
+  ) {
+    return 'legacy-square-to-landscape';
+  }
+
+  if (
+    widthInches === LEGACY_PORTRAIT_TABLE.widthInches &&
+    heightInches === LEGACY_PORTRAIT_TABLE.heightInches
+  ) {
+    return 'legacy-portrait-to-landscape';
+  }
+
+  return null;
+};
+
+const clampPieceToTable = (piece: TerrainPiece, table: TableSettings): TerrainPiece => {
+  const rotation = normalizeRotation(piece.rotation);
+  const { halfWidth, halfHeight } = getPieceHalfExtents({ ...piece, rotation });
+
+  return {
+    ...piece,
+    x: clamp(piece.x, halfWidth, Math.max(halfWidth, table.widthInches - halfWidth)),
+    y: clamp(piece.y, halfHeight, Math.max(halfHeight, table.heightInches - halfHeight)),
+    rotation,
+  };
+};
+
+const migratePieceToLandscape = (piece: TerrainPiece, migration: LayoutMigration): TerrainPiece => {
+  if (migration === 'legacy-portrait-to-landscape') {
+    return {
+      ...piece,
+      x: piece.y,
+      y: LEGACY_PORTRAIT_TABLE.widthInches - piece.x,
+      rotation: normalizeRotation(piece.rotation - 90),
+    };
+  }
+
+  if (migration === 'legacy-square-to-landscape') {
+    return {
+      ...piece,
+      x: piece.x + (DEFAULT_LAYOUT.table.widthInches - LEGACY_SQUARE_TABLE.widthInches) / 2,
+    };
+  }
+
+  return piece;
+};
 
 const normalizeTrait = (value: unknown): TerrainTrait | null => {
   if (!isObject(value)) {
@@ -72,21 +139,20 @@ const normalizePiece = (value: unknown): TerrainPiece | null => {
   };
 };
 
-const normalizeTable = (value: unknown): TableSettings => {
+const normalizeTable = (value: unknown, migration: LayoutMigration): TableSettings => {
   const source = isObject(value) ? value : {};
-
-  // Migration: upgrade old 48x48 layouts to 48x72
-  let heightInches = coerceNumber(source.heightInches, DEFAULT_LAYOUT.table.heightInches, 24, 72);
-  const widthInches = coerceNumber(source.widthInches, DEFAULT_LAYOUT.table.widthInches, 24, 72);
-  
-  // If we detect the old 48x48 default, upgrade to 48x72
-  if (widthInches === 48 && heightInches === 48) {
-    heightInches = 72;
-  }
+  const rawWidthInches = coerceNumber(source.widthInches, DEFAULT_LAYOUT.table.widthInches, 24, 72);
+  const rawHeightInches = coerceNumber(source.heightInches, DEFAULT_LAYOUT.table.heightInches, 24, 72);
 
   return {
-    widthInches,
-    heightInches,
+    widthInches:
+      migration === 'legacy-square-to-landscape' || migration === 'legacy-portrait-to-landscape'
+        ? DEFAULT_LAYOUT.table.widthInches
+        : rawWidthInches,
+    heightInches:
+      migration === 'legacy-square-to-landscape' || migration === 'legacy-portrait-to-landscape'
+        ? DEFAULT_LAYOUT.table.heightInches
+        : rawHeightInches,
     deploymentDepthInches: coerceNumber(
       source.deploymentDepthInches,
       DEFAULT_LAYOUT.table.deploymentDepthInches,
@@ -164,8 +230,13 @@ export const normalizeLayout = (value: unknown): LayoutState | null => {
     return null;
   }
 
+  const migration = getLayoutMigration(value.table);
+  const table = normalizeTable(value.table, migration);
   const pieces = Array.isArray(value.pieces)
-    ? value.pieces.map(normalizePiece).filter((piece): piece is TerrainPiece => piece !== null)
+    ? value.pieces
+        .map(normalizePiece)
+        .filter((piece): piece is TerrainPiece => piece !== null)
+        .map((piece) => clampPieceToTable(migratePieceToLandscape(piece, migration), table))
     : [];
 
   const placementConfig = normalizePlacementConfig(value.placementConfig);
@@ -176,7 +247,7 @@ export const normalizeLayout = (value: unknown): LayoutState | null => {
 
   return {
     version: 1,
-    table: normalizeTable(value.table),
+    table,
     pieces,
     ...(placementConfig && Object.keys(placementConfig).length > 0 ? { placementConfig } : {}),
     ...(customTemplates && customTemplates.length > 0 ? { customTemplates } : {}),

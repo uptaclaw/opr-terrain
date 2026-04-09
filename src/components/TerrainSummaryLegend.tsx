@@ -7,6 +7,7 @@ import type { TerrainPiece } from '../types/layout';
 
 interface TerrainSummaryLegendProps {
   pieces: TerrainPiece[];
+  className?: string;
 }
 
 const accentClasses: Record<TerrainSummaryCategoryId, string> = {
@@ -22,11 +23,14 @@ const accentClasses: Record<TerrainSummaryCategoryId, string> = {
 const formatPieceCount = (count: number) => `${count} piece${count === 1 ? '' : 's'}`;
 const formatPercentage = (percentage: number) => `${percentage}%`;
 
-export function TerrainSummaryLegend({ pieces }: TerrainSummaryLegendProps) {
+export function TerrainSummaryLegend({ pieces, className = '' }: TerrainSummaryLegendProps) {
   const summary = useMemo(() => calculateTerrainSummary(pieces), [pieces]);
 
   return (
-    <section data-testid="terrain-summary" className="screen-only mt-5 rounded-3xl border border-white/10 bg-slate-950/40 p-4 sm:p-5">
+    <section
+      data-testid="terrain-summary"
+      className={`screen-only rounded-3xl border border-white/10 bg-slate-950/40 p-4 sm:p-5 ${className}`.trim()}
+    >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h3 className="text-base font-semibold text-white sm:text-lg">Terrain summary legend</h3>

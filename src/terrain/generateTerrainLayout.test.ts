@@ -76,8 +76,8 @@ describe('generateTerrainLayout', () => {
       const nonZeroShapeKinds = Object.values(analysis.shapeCounts).filter((count) => count > 0);
 
       expect(layout.pieces).toHaveLength(DEFAULT_TEST_PIECE_COUNT);
-      expect(layout.widthInches).toBe(48);
-      expect(layout.heightInches).toBe(72);
+      expect(layout.widthInches).toBe(72);
+      expect(layout.heightInches).toBe(48);
       expect(Math.max(...analysis.quarterCounts)).toBeLessThanOrEqual(4);
       expect(analysis.overlaps).toHaveLength(0);
       expect(analysis.deploymentCenterIntrusions).toHaveLength(0);
