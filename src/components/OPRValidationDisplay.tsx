@@ -4,7 +4,7 @@ interface OPRValidationDisplayProps {
   validation: OPRValidation | undefined;
 }
 
-const ValidationItem = ({
+export const ValidationItem = ({
   label,
   value,
   requirement,

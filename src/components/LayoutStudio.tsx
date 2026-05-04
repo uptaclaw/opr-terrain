@@ -43,9 +43,7 @@ import { formatInches, formatTableMeasure, getSceneSize, TABLE_SCENE_MARGIN, Tab
 import { TERRAIN_LIBRARY_MIME_TYPE, TerrainPaletteTable } from './TerrainPaletteTable';
 import type { PieceFormData } from './TerrainPieceModal';
 import { AutoPlacementGenerator } from './AutoPlacementGenerator';
-import { TerrainSummaryLegend } from './TerrainSummaryLegend';
-import { OPRValidationDisplay } from './OPRValidationDisplay';
-import { TableCoverageIndicator } from './TableCoverageIndicator';
+import { StatsBar } from './StatsBar';
 import type { TerrainLayout } from '../terrain/types';
 import { getPieceHalfExtents, normalizeRotation } from '../lib/pieceBounds';
 import { getPrintLegendTraitText } from '../lib/printLegend';
@@ -66,7 +64,7 @@ type RotationSession = {
   latestRotation: number;
 };
 
-type LosCheckState =
+export type LosCheckState =
   | { status: 'idle' }
   | { status: 'stale' }
   | { status: 'loading' }
@@ -1415,21 +1413,18 @@ export function LayoutStudio() {
             data-testid="interactive-map-panel"
             className="rounded-3xl border border-white/10 bg-slate-900/65 p-4 shadow-xl shadow-slate-950/20 sm:p-6 xl:flex xl:min-h-[36rem] xl:flex-col"
           >
-            <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Map</h2>
-                <p className="mt-1 text-sm text-slate-300">
-                  Drag terrain from the library, click a piece to select it, reposition it, and
-                  rotate non-round terrain with the on-canvas handle.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-right text-sm text-slate-200">
-                <p className="font-semibold text-white">{screenLegend}</p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {layout.pieces.length} pieces · deployment depth {formatInches(layout.table.deploymentDepthInches)}
-                </p>
-              </div>
-            </div>
+            <StatsBar
+              screenLegend={screenLegend}
+              pieceCount={layout.pieces.length}
+              deploymentDepthInches={layout.table.deploymentDepthInches}
+              pieces={layout.pieces}
+              tableWidthInches={layout.table.widthInches}
+              tableHeightInches={layout.table.heightInches}
+              validation={layout.oprValidation}
+              losCheckState={losCheckState}
+              onRunLosCheck={handleRunLosCheck}
+              onClearLosCheck={handleClearLosCheck}
+            />
 
             <div className="overflow-hidden rounded-3xl border border-white/10 bg-slate-950/70 p-3 shadow-inner shadow-slate-950/30 sm:p-4 xl:flex-1">
               <TableCanvas
@@ -1469,92 +1464,13 @@ export function LayoutStudio() {
         </div>
 
         <aside data-testid="studio-sidebar" className="flex flex-col gap-6 xl:w-[22rem] xl:max-w-[22rem]">
-          <div className="flex flex-col gap-4">
-            <AutoPlacementGenerator
-              widthInches={layout.table.widthInches}
-              heightInches={layout.table.heightInches}
-              deploymentDepthInches={layout.table.deploymentDepthInches}
-              onLayoutGenerated={handleLayoutGenerated}
-              initialConfig={layout.placementConfig}
-            />
-
-            <OPRValidationDisplay validation={layout.oprValidation} />
-
-            <TableCoverageIndicator
-              pieces={layout.pieces}
-              tableWidthInches={layout.table.widthInches}
-              tableHeightInches={layout.table.heightInches}
-            />
-          </div>
-
-          <section
-            data-testid="los-check-panel"
-            className="rounded-3xl border border-white/10 bg-slate-900/65 p-5 shadow-xl shadow-slate-950/20"
-          >
-            <div className="flex flex-col gap-4">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Edge-to-edge LoS check</h2>
-                <p className="mt-1 text-sm text-slate-300">
-                  Check every integer point along the opposite long edges. Any terrain piece counts
-                  as blocking terrain.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={handleRunLosCheck}
-                  disabled={losCheckState.status === 'loading'}
-                  className="rounded-2xl bg-rose-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {losCheckState.status === 'loading' ? 'Checking line of sight…' : 'Check Line of Sight'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleClearLosCheck}
-                  disabled={losCheckState.status !== 'done'}
-                  className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/25 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Clear LoS Check
-                </button>
-              </div>
-
-              {losCheckState.status === 'loading' ? (
-                <div
-                  role="status"
-                  className="rounded-2xl border border-cyan-400/25 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100"
-                >
-                  Checking every long-edge path… this can take a moment on dense boards.
-                </div>
-              ) : losCheckResult ? (
-                losCheckResult.allSightlinesBlocked ? (
-                  <div
-                    role="status"
-                    className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100"
-                  >
-                    ✓ No edge-to-edge sightlines across {losCheckResult.totalSightlines.toLocaleString()} lines checked.
-                  </div>
-                ) : (
-                  <div
-                    role="status"
-                    className="rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-100"
-                  >
-                    ✗ Found {losCheckResult.clearSightlineCount.toLocaleString()} clear sightlines. Red lines show every unblocked path.
-                  </div>
-                )
-              ) : losCheckState.status === 'stale' ? (
-                <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                  Terrain changed since the last LoS check. Run it again to refresh the overlay.
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
-                  Runs on demand so the board stays snappy. Results stay cached until the terrain changes.
-                </div>
-              )}
-            </div>
-          </section>
-
-          <TerrainSummaryLegend pieces={layout.pieces} className="mt-0" />
+          <AutoPlacementGenerator
+            widthInches={layout.table.widthInches}
+            heightInches={layout.table.heightInches}
+            deploymentDepthInches={layout.table.deploymentDepthInches}
+            onLayoutGenerated={handleLayoutGenerated}
+            initialConfig={layout.placementConfig}
+          />
         </aside>
       </section>
 
