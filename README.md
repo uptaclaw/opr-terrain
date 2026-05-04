@@ -25,8 +25,6 @@ Required checks (enforced by policy, not branch protection):
 
 GitHub Actions runs these tests automatically on every PR. While we cannot technically enforce test requirements (requires GitHub paid plan for private repos), **developers and reviewers must verify that all CI checks are green before merging**.
 
-See `devclaw/prompts/developer.md` and `devclaw/prompts/reviewer.md` for detailed policy requirements.
-
 ## Scripts
 
 - `npm install` — install dependencies
