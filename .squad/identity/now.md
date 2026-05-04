@@ -1,9 +1,9 @@
 ---
-updated_at: 2026-05-04T15:41:35.063Z
-focus_area: Initial setup
+updated_at: 2026-05-04T16:17:20.635Z
+focus_area: Team setup and devclaw migration
 active_issues: []
 ---
 
 # What We're Focused On
 
-Getting started. Updated by coordinator at session start.
+Team setup complete. Migrated from devclaw to Squad. Cleaned up old labels, prompts, and artifacts. Board is clear — ready for work.

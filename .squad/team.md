@@ -25,3 +25,9 @@
 - **Stack:** React 18, TypeScript, Vite, Tailwind CSS v4, Vitest, Playwright
 - **Repo:** uptaclaw/opr-terrain
 - **Created:** 2026-05-04
+
+## Issue Source
+
+- **Repository:** uptaclaw/opr-terrain
+- **Connected:** 2026-05-04
+- **Labels:** `squad`, `squad:architect`, `squad:builder`, `squad:checker`
