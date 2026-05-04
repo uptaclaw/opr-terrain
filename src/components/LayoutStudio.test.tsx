@@ -304,26 +304,31 @@ describe('LayoutStudio', () => {
   it('renders a compact summary legend and updates it when terrain is added to the layout', () => {
     render(<LayoutStudio />);
 
-    const summary = screen.getByTestId('terrain-summary');
+    // Piece count is displayed in the stats bar dimensions badge
+    expect(screen.getByText(/6 pieces · deployment depth/)).toBeInTheDocument();
 
-    expect(within(summary).getByRole('heading', { name: /summary legend/i })).toBeInTheDocument();
-    expect(summary).toHaveTextContent('6 pieces');
+    // Open the summary legend modal via the Terrain Types badge
+    fireEvent.click(screen.getByRole('button', { name: /terrain types/i }));
 
-    const centralRuinsEntry = within(summary)
+    // Scope queries to the legend modal dialog
+    const legendDialog = screen.getByText('Summary Legend').closest('dialog')!;
+
+    const centralRuinsEntry = within(legendDialog)
       .getByText('Central Ruins', { selector: 'h4' })
-      .closest('[data-testid="terrain-summary-entry"]');
+      .closest('article');
 
     expect(centralRuinsEntry).not.toBeNull();
     expect(within(centralRuinsEntry as HTMLElement).getByText('Cover • Difficult • LoS Blocking')).toBeInTheDocument();
 
+    // Add a bunker from the library
     const bunkerRow = screen.getByTestId('library-item-bunker');
     fireEvent.click(within(bunkerRow).getByRole('button', { name: /add/i }));
 
-    expect(summary).toHaveTextContent('7 pieces');
+    expect(screen.getByText(/7 pieces · deployment depth/)).toBeInTheDocument();
 
-    const bunkerEntry = within(summary)
+    const bunkerEntry = within(legendDialog)
       .getByText('Bunker', { selector: 'h4' })
-      .closest('[data-testid="terrain-summary-entry"]');
+      .closest('article');
 
     expect(bunkerEntry).not.toBeNull();
     expect(within(bunkerEntry as HTMLElement).getByText('Cover • Impassable • LoS Blocking')).toBeInTheDocument();
@@ -488,15 +493,21 @@ describe('LayoutStudio', () => {
 
     render(<LayoutStudio />);
 
-    fireEvent.click(screen.getByRole('button', { name: /check line of sight/i }));
+    // Find the LoS toggle checkbox near the "LoS Check" label
+    const losContainer = screen.getByText('LoS Check').parentElement!;
+    const losCheckbox = within(losContainer).getByRole('checkbox');
 
-    expect(screen.getByRole('button', { name: /checking line of sight/i })).toBeDisabled();
-    expect(await screen.findByText(/found 625 clear sightlines/i)).toBeInTheDocument();
+    // Toggle LoS check on
+    fireEvent.click(losCheckbox);
+
+    expect(screen.getByText('Checking...')).toBeInTheDocument();
+    expect(await screen.findByText(/clear paths found/i)).toBeInTheDocument();
 
     const [interactiveCanvas] = screen.getAllByTestId('table-canvas-svg');
     expect(interactiveCanvas.querySelectorAll('[data-testid="los-clear-sightline"]')).toHaveLength(625);
 
-    fireEvent.click(screen.getByRole('button', { name: /clear los check/i }));
+    // Toggle LoS check off to clear sightlines
+    fireEvent.click(losCheckbox);
 
     await waitFor(() => {
       expect(interactiveCanvas.querySelectorAll('[data-testid="los-clear-sightline"]')).toHaveLength(0);
@@ -525,9 +536,14 @@ describe('LayoutStudio', () => {
 
     render(<LayoutStudio />);
 
-    fireEvent.click(screen.getByRole('button', { name: /check line of sight/i }));
+    // Find the LoS toggle checkbox near the "LoS Check" label
+    const losContainer = screen.getByText('LoS Check').parentElement!;
+    const losCheckbox = within(losContainer).getByRole('checkbox');
 
-    expect(await screen.findByText(/no edge-to-edge sightlines across 625 lines checked/i)).toBeInTheDocument();
+    // Toggle LoS check on
+    fireEvent.click(losCheckbox);
+
+    expect(await screen.findByText(/all blocked/i)).toBeInTheDocument();
 
     const [interactiveCanvas] = screen.getAllByTestId('table-canvas-svg');
     expect(interactiveCanvas.querySelectorAll('[data-testid="los-clear-sightline"]')).toHaveLength(0);
