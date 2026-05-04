@@ -14,6 +14,7 @@ interface AutoPlacementGeneratorProps {
   deploymentDepthInches: number;
   onLayoutGenerated: (layout: TerrainLayout) => void;
   initialConfig?: PlacementConfig;
+  hasExistingPieces?: boolean;
 }
 
 const STRATEGY_OPTIONS: Array<{ value: PlacementStrategy; label: string }> = [
@@ -73,6 +74,7 @@ export function AutoPlacementGenerator({
   deploymentDepthInches,
   onLayoutGenerated,
   initialConfig,
+  hasExistingPieces,
 }: AutoPlacementGeneratorProps) {
   const [placementConfig, setPlacementConfig] = useState<PlacementConfig>(initialConfig || {
     strategy: 'random',
@@ -277,16 +279,7 @@ export function AutoPlacementGenerator({
             disabled={isGenerating}
             className="flex-1 rounded-2xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isGenerating ? 'Generating...' : 'Generate Layout'}
-          </button>
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="rounded-2xl border border-cyan-400/40 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-            title="Re-generate Terrain"
-          >
-            Re-generate Terrain
+            {isGenerating ? 'Generating...' : hasExistingPieces ? 'Re-generate Terrain' : 'Generate Layout'}
           </button>
         </div>
 

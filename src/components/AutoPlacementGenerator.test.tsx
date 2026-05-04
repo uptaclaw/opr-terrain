@@ -50,7 +50,7 @@ describe('AutoPlacementGenerator', () => {
     expect(Number(pieceCountSlider.value)).toBeGreaterThanOrEqual(10);
     expect(Number(pieceCountSlider.value)).toBeLessThanOrEqual(15);
 
-    expect(screen.getByRole('button', { name: /re-generate terrain/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /generate layout/i })).toBeInTheDocument();
   });
 
   it('restores UI state from initialConfig prop', () => {
@@ -168,6 +168,7 @@ describe('AutoPlacementGenerator', () => {
         heightInches={72}
         deploymentDepthInches={12}
         onLayoutGenerated={onLayoutGenerated}
+        hasExistingPieces
       />,
     );
 

@@ -157,26 +157,30 @@ export function StatsBar({
         </div>
 
         {/* OPR Validation summary badge */}
-        {validation && (
-          <button
-            type="button"
-            onClick={() => setOprModalOpen(true)}
-            className={`cursor-pointer rounded-2xl border px-4 py-2.5 transition hover:scale-105 hover:brightness-125 ${
-              validation.allValid
+        <button
+          type="button"
+          onClick={() => validation && setOprModalOpen(true)}
+          className={`cursor-pointer rounded-2xl border px-4 py-2.5 transition hover:scale-105 hover:brightness-125 ${
+            validation
+              ? validation.allValid
                 ? 'border-emerald-400/25 bg-emerald-500/10'
                 : 'border-amber-400/25 bg-amber-500/10'
+              : 'border-white/10 bg-slate-950/50'
+          }`}
+        >
+          <p className="text-xs text-slate-400">OPR Guidelines</p>
+          <p
+            className={`mt-0.5 text-sm font-semibold ${
+              validation
+                ? validation.allValid ? 'text-emerald-100' : 'text-amber-100'
+                : 'text-slate-500'
             }`}
           >
-            <p className="text-xs text-slate-400">OPR Guidelines</p>
-            <p
-              className={`mt-0.5 text-sm font-semibold ${
-                validation.allValid ? 'text-emerald-100' : 'text-amber-100'
-              }`}
-            >
-              {validation.allValid ? '✓' : '⚠'} {validationPassCount}/9 checks
-            </p>
-          </button>
-        )}
+            {validation
+              ? `${validation.allValid ? '✓' : '⚠'} ${validationPassCount}/9 checks`
+              : '—'}
+          </p>
+        </button>
 
         {/* Summary legend badge */}
         <button

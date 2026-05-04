@@ -1470,6 +1470,7 @@ export function LayoutStudio() {
             deploymentDepthInches={layout.table.deploymentDepthInches}
             onLayoutGenerated={handleLayoutGenerated}
             initialConfig={layout.placementConfig}
+            hasExistingPieces={layout.pieces.length > 0}
           />
         </aside>
       </section>
