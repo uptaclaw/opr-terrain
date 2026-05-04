@@ -17,10 +17,13 @@ test('line-of-sight validation draws red sightlines and clears them again', asyn
 
   await studio.goto(openBoardHash);
 
-  await page.getByRole('button', { name: /check line of sight/i }).click();
-  await expect(page.getByText(/found 625 clear sightlines/i)).toBeVisible();
+  // Toggle LoS check ON via checkbox (force: true because input is sr-only behind styled toggle)
+  const losToggle = page.getByTestId('los-toggle');
+  await losToggle.check({ force: true });
+  await expect(page.getByText(/clear paths found/i)).toBeVisible();
   await expect(studio.interactiveCanvas.locator('[data-testid="los-clear-sightline"]')).toHaveCount(625);
 
-  await page.getByRole('button', { name: /clear los check/i }).click();
+  // Toggle LoS check OFF
+  await losToggle.uncheck({ force: true });
   await expect(studio.interactiveCanvas.locator('[data-testid="los-clear-sightline"]')).toHaveCount(0);
 });

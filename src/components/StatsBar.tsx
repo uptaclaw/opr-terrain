@@ -131,7 +131,7 @@ export function StatsBar({
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div data-testid="stats-bar" className="mb-4 flex flex-wrap items-center gap-3">
         {/* Table dimensions badge */}
         <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-2.5">
           <p className="text-sm font-semibold text-white">{screenLegend}</p>
@@ -210,6 +210,7 @@ export function StatsBar({
                   onChange={handleLosToggle}
                   disabled={losCheckState.status === 'loading'}
                   className="peer sr-only"
+                  data-testid="los-toggle"
                 />
                 <div className="peer h-6 w-11 rounded-full bg-slate-700 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-rose-400 peer-checked:after:translate-x-full peer-checked:after:border-white peer-disabled:cursor-not-allowed peer-disabled:opacity-50"></div>
               </label>
