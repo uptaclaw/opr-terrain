@@ -1,4 +1,4 @@
-name: Validate & Deploy to Production
+name: Validate & Deploy to GitHub Pages
 
 on:
   pull_request:
@@ -6,6 +6,15 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   validate:
@@ -31,15 +40,17 @@ jobs:
         run: npm run test
 
       - name: Build production bundle
+        env:
+          VITE_BASE_PATH: /opr-terrain/
         run: npm run build
 
       - name: Start preview server
         run: |
-          nohup npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/opr-terrain-preview.log 2>&1 &
-          echo $! > /tmp/opr-terrain-preview.pid
+          nohup npm run preview -- --host 127.0.0.1 --port 4173 > preview.log 2>&1 &
+          echo $! > preview.pid
 
           for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:4173/ > /dev/null; then
+            if curl -fsS http://127.0.0.1:4173/opr-terrain/ > /dev/null; then
               echo "Preview server is ready"
               exit 0
             fi
@@ -47,20 +58,20 @@ jobs:
           done
 
           echo "Preview server failed to start"
-          cat /tmp/opr-terrain-preview.log || true
+          cat preview.log || true
           exit 1
 
       - name: Run Playwright end-to-end tests
         env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173/opr-terrain/
           PLAYWRIGHT_WEB_SERVER: 'off'
         run: npm run test:e2e
 
       - name: Stop preview server
         if: always()
         run: |
-          if [ -f /tmp/opr-terrain-preview.pid ]; then
-            kill $(cat /tmp/opr-terrain-preview.pid) || true
+          if [ -f preview.pid ]; then
+            kill $(cat preview.pid) || true
           fi
 
       - name: Upload Playwright artifacts
@@ -71,13 +82,16 @@ jobs:
           path: |
             playwright-report/
             test-results/
-            /tmp/opr-terrain-preview.log
+            preview.log
           if-no-files-found: ignore
 
   deploy:
     needs: validate
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout code
@@ -93,55 +107,18 @@ jobs:
         run: npm ci
 
       - name: Build production bundle
+        env:
+          VITE_BASE_PATH: /opr-terrain/
         run: npm run build
 
-      - name: Ensure remote deploy directory exists
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            # Directory should already exist and be owned by deploy user
-            # If not, manual setup is required: sudo mkdir -p /var/www/opr-terrain && sudo chown $USER:$USER /var/www/opr-terrain
-            mkdir -p /var/www/opr-terrain
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
 
-      - name: Deploy static site via rsync
-        uses: burnett01/rsync-deployments@6.0.0
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          switches: -avzr --delete
-          path: dist/
-          remote_path: /var/www/opr-terrain/
-          remote_host: ${{ secrets.DEPLOY_HOST }}
-          remote_user: ${{ secrets.DEPLOY_USER }}
-          remote_key: ${{ secrets.DEPLOY_SSH_KEY }}
+          path: dist
 
-      - name: Verify nginx configuration
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            # Nginx should already be configured to serve from /var/www/opr-terrain
-            # Verify the configuration is correct
-            if ! curl -fsSL http://localhost/ | grep -q '<title>OPR Terrain</title>'; then
-              echo "Warning: nginx may not be configured correctly for opr-terrain"
-              echo "Manual setup may be required"
-              exit 1
-            fi
-            echo "Nginx configuration verified"
-
-      - name: Health check
-        run: |
-          for i in {1..5}; do
-            if curl -fsSL "http://${{ secrets.DEPLOY_HOST }}/" | grep -q '<title>OPR Terrain</title>' && \
-               curl -fsSL "http://${{ secrets.DEPLOY_HOST }}/health" | grep -q '^ok$'; then
-              echo "Health check passed"
-              exit 0
-            fi
-            echo "Health check failed, retrying..."
-            sleep 5
-          done
-          echo "Health check failed after 5 attempts"
-          exit 1
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

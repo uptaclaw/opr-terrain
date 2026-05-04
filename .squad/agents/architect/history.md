@@ -10,3 +10,5 @@
 ## Learnings
 
 <!-- Append new learnings below. Each entry is something lasting about the project. -->
+
+- **2026-05-04:** Switched deployment from VM (SSH/rsync/nginx) to GitHub Pages. Workflow uses `actions/deploy-pages@v4`. Build sets `VITE_BASE_PATH=/opr-terrain/` for the GitHub Pages subpath. The existing `vite.config.ts` already supported this via `loadEnv` — no config changes needed. Deleted `nginx/` directory. The repo is private, so GitHub Pages requires a paid plan. E2E tests in CI run against the preview server at the subpath (`/opr-terrain/`). Brian must enable Pages source as "GitHub Actions" in repo settings.

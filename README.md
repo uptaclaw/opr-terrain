@@ -83,17 +83,15 @@ On failures, Playwright keeps screenshots, traces, and videos in `test-results/`
 
 ## Deployment
 
-Automated deployment lives in `.github/workflows/deploy.yml` and follows the same SSH-based pattern as `uptaclaw/todo-app`.
+Automated deployment lives in `.github/workflows/deploy.yml` and publishes the static build to **GitHub Pages**.
 
 ### Production target
 
-The workflow builds the app with the default root base path and publishes `dist/` into a dedicated static directory:
+The live site is served at:
 
-- `/var/www/opr-terrain/`
+- `https://uptaclaw.github.io/opr-terrain/`
 
-With `nginx/default.conf` applied, the live site is served directly from the VM root URL:
-
-- `http://20.69.110.195/`
+The build uses `VITE_BASE_PATH=/opr-terrain/` so all asset URLs are rooted under the repo subpath.
 
 ### GitHub Actions flow
 
@@ -113,26 +111,17 @@ The workflow validates all pull requests and only deploys after checks pass on `
 
 **On every push to `main`, after validation passes:**
 
-1. ensures `/var/www/opr-terrain` exists over SSH
-2. rsyncs `dist/` to `/var/www/opr-terrain/`
-3. installs the static-only nginx config for that directory and reloads nginx
-4. verifies both the root page title and `/health` response
+1. Builds the production bundle with the `/opr-terrain/` base path
+2. Uploads the `dist/` directory as a GitHub Pages artifact
+3. Deploys to GitHub Pages via `actions/deploy-pages`
 
-The same workflow also supports `workflow_dispatch` for manual re-runs after the workflow exists on `main`.
+The same workflow also supports `workflow_dispatch` for manual re-runs.
 
-### Required GitHub secrets
+### Required setup
 
-Use the same secret names as `todo-app`:
+Enable GitHub Pages in your repository settings:
 
-- `DEPLOY_HOST`
-- `DEPLOY_USER`
-- `DEPLOY_SSH_KEY`
+1. Go to **Settings → Pages**
+2. Under **Build and deployment**, set **Source** to **GitHub Actions**
 
-### nginx configs
-
-Two nginx configs are included:
-
-- `nginx/default.conf` — dedicated static-only site rooted at `/var/www/opr-terrain` with SPA fallback and no `/api/` proxy block. The GitHub Actions workflow writes this config to the VM and reloads nginx on deploy.
-- `nginx/opr-terrain-location.conf` — optional location block for serving the same `/var/www/opr-terrain` build alongside another site at `/opr-terrain/`
-
-If you ever switch to the alongside route, rebuild with `VITE_BASE_PATH=/opr-terrain/ npm run build` before syncing files so asset URLs stay rooted under `/opr-terrain/`.
+No secrets are required — GitHub Pages deployment uses the built-in `GITHUB_TOKEN`.
