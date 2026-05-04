@@ -20,7 +20,6 @@ test('line-of-sight validation draws red sightlines and clears them again', asyn
   // Toggle LoS check ON via checkbox (force: true because input is sr-only behind styled toggle)
   const losToggle = page.getByTestId('los-toggle');
   await losToggle.check({ force: true });
-  await expect(page.getByText(/clear paths found/i)).toBeVisible();
   await expect(studio.interactiveCanvas.locator('[data-testid="los-clear-sightline"]')).toHaveCount(625);
 
   // Toggle LoS check OFF

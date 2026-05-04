@@ -141,15 +141,7 @@ export function StatsBar({
         </div>
 
         {/* Table coverage badge */}
-        <div
-          className={`rounded-2xl border px-4 py-2.5 ${
-            coveragePercent >= 25
-              ? 'border-emerald-400/25 bg-emerald-500/10'
-              : coveragePercent > 0
-              ? 'border-amber-400/25 bg-amber-500/10'
-              : 'border-white/10 bg-slate-950/50'
-          }`}
-        >
+        <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-2.5">
           <p className="text-xs text-slate-400">Table Coverage</p>
           <p
             className={`mt-0.5 text-sm font-semibold ${
@@ -169,7 +161,7 @@ export function StatsBar({
           <button
             type="button"
             onClick={() => setOprModalOpen(true)}
-            className={`rounded-2xl border px-4 py-2.5 transition hover:scale-105 ${
+            className={`cursor-pointer rounded-2xl border px-4 py-2.5 transition hover:scale-105 hover:brightness-125 ${
               validation.allValid
                 ? 'border-emerald-400/25 bg-emerald-500/10'
                 : 'border-amber-400/25 bg-amber-500/10'
@@ -190,7 +182,7 @@ export function StatsBar({
         <button
           type="button"
           onClick={() => setLegendModalOpen(true)}
-          className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-2.5 transition hover:scale-105"
+          className="cursor-pointer rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-2.5 transition hover:scale-105 hover:brightness-125"
         >
           <p className="text-xs text-slate-400">Terrain Types</p>
           <p className="mt-0.5 text-sm font-semibold text-white">
@@ -216,18 +208,6 @@ export function StatsBar({
               </label>
               {losCheckState.status === 'loading' && (
                 <span className="text-xs text-cyan-100">Checking...</span>
-              )}
-              {losCheckState.status === 'done' && losCheckResult && (
-                <span
-                  className={`text-xs ${
-                    losCheckResult.allSightlinesBlocked ? 'text-emerald-100' : 'text-rose-100'
-                  }`}
-                >
-                  {losCheckResult.allSightlinesBlocked ? '✓ All blocked' : '✗ Clear paths found'}
-                </span>
-              )}
-              {losCheckState.status === 'stale' && (
-                <span className="text-xs text-amber-100">⚠ Stale</span>
               )}
             </div>
           </div>

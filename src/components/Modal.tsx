@@ -55,7 +55,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
     <dialog
       ref={dialogRef}
       onClick={handleBackdropClick}
-      className="rounded-3xl border border-white/10 bg-slate-900/95 p-0 text-white shadow-2xl backdrop:bg-slate-950/80 backdrop:backdrop-blur-sm"
+      className="m-auto rounded-3xl border border-white/10 bg-slate-900/95 p-0 text-white shadow-2xl backdrop:bg-slate-950/80 backdrop:backdrop-blur-sm"
     >
       <div className="flex min-h-0 max-w-2xl flex-col">
         <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">

@@ -501,10 +501,12 @@ describe('LayoutStudio', () => {
     fireEvent.click(losCheckbox);
 
     expect(screen.getByText('Checking...')).toBeInTheDocument();
-    expect(await screen.findByText(/clear paths found/i)).toBeInTheDocument();
 
     const [interactiveCanvas] = screen.getAllByTestId('table-canvas-svg');
-    expect(interactiveCanvas.querySelectorAll('[data-testid="los-clear-sightline"]')).toHaveLength(625);
+
+    await waitFor(() => {
+      expect(interactiveCanvas.querySelectorAll('[data-testid="los-clear-sightline"]')).toHaveLength(625);
+    });
 
     // Toggle LoS check off to clear sightlines
     fireEvent.click(losCheckbox);
@@ -543,9 +545,10 @@ describe('LayoutStudio', () => {
     // Toggle LoS check on
     fireEvent.click(losCheckbox);
 
-    expect(await screen.findByText(/all blocked/i)).toBeInTheDocument();
-
     const [interactiveCanvas] = screen.getAllByTestId('table-canvas-svg');
-    expect(interactiveCanvas.querySelectorAll('[data-testid="los-clear-sightline"]')).toHaveLength(0);
+
+    await waitFor(() => {
+      expect(interactiveCanvas.querySelectorAll('[data-testid="los-clear-sightline"]')).toHaveLength(0);
+    });
   });
 });
