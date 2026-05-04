@@ -45,6 +45,7 @@ import type { PieceFormData } from './TerrainPieceModal';
 import { AutoPlacementGenerator } from './AutoPlacementGenerator';
 import { TerrainSummaryLegend } from './TerrainSummaryLegend';
 import { OPRValidationDisplay } from './OPRValidationDisplay';
+import { TableCoverageIndicator } from './TableCoverageIndicator';
 import type { TerrainLayout } from '../terrain/types';
 import { getPieceHalfExtents, normalizeRotation } from '../lib/pieceBounds';
 import { getPrintLegendTraitText } from '../lib/printLegend';
@@ -1478,6 +1479,12 @@ export function LayoutStudio() {
             />
 
             <OPRValidationDisplay validation={layout.oprValidation} />
+
+            <TableCoverageIndicator
+              pieces={layout.pieces}
+              tableWidthInches={layout.table.widthInches}
+              tableHeightInches={layout.table.heightInches}
+            />
           </div>
 
           <section
