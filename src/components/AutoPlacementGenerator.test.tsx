@@ -32,6 +32,8 @@ describe('AutoPlacementGenerator', () => {
         heightInches={72}
         deploymentDepthInches={12}
         onLayoutGenerated={() => {}}
+        open={true}
+        onClose={() => {}}
       />,
     );
 
@@ -69,6 +71,8 @@ describe('AutoPlacementGenerator', () => {
         deploymentDepthInches={12}
         onLayoutGenerated={() => {}}
         initialConfig={savedConfig}
+        open={true}
+        onClose={() => {}}
       />,
     );
 
@@ -106,6 +110,8 @@ describe('AutoPlacementGenerator', () => {
         deploymentDepthInches={12}
         onLayoutGenerated={() => {}}
         initialConfig={initialConfig}
+        open={true}
+        onClose={() => {}}
       />,
     );
 
@@ -129,6 +135,8 @@ describe('AutoPlacementGenerator', () => {
         deploymentDepthInches={12}
         onLayoutGenerated={() => {}}
         initialConfig={loadedConfig}
+        open={true}
+        onClose={() => {}}
       />,
     );
 
@@ -169,6 +177,8 @@ describe('AutoPlacementGenerator', () => {
         deploymentDepthInches={12}
         onLayoutGenerated={onLayoutGenerated}
         hasExistingPieces
+        open={true}
+        onClose={() => {}}
       />,
     );
 

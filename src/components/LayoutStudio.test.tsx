@@ -338,7 +338,7 @@ describe('LayoutStudio', () => {
     render(<LayoutStudio />);
 
     expect(() => {
-      fireEvent.click(screen.getByRole('button', { name: /generate layout|re-generate terrain/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^generate$|^re-generate$/i }));
     }).not.toThrow();
 
     const statusMessage = await screen.findByText(/generated \d+ terrain pieces using random strategy/i, {}, {

@@ -121,6 +121,7 @@ export function TerrainEditor({
   const [draggingPieceId, setDraggingPieceId] = useState<string | null>(null);
   const [rotatingPieceId, setRotatingPieceId] = useState<string | null>(null);
   const [libraryDragActive, setLibraryDragActive] = useState(false);
+  const [autoPlacementOpen, setAutoPlacementOpen] = useState(false);
   const [snapToGridEnabled, setSnapToGridEnabled] = useState(true);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -700,11 +701,20 @@ export function TerrainEditor({
         </div>
 
         <aside className="flex flex-col gap-4">
+          <button
+            type="button"
+            onClick={() => setAutoPlacementOpen(true)}
+            className="rounded-2xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
+          >
+            Auto Placement Settings
+          </button>
           <AutoPlacementGenerator
             widthInches={widthInches}
             heightInches={heightInches}
             deploymentDepthInches={deploymentDepthInches}
             onLayoutGenerated={handleLayoutGenerated}
+            open={autoPlacementOpen}
+            onClose={() => setAutoPlacementOpen(false)}
           />
 
           <section className="rounded-3xl border border-white/10 bg-slate-900/70 p-5">

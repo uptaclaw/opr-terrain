@@ -8,7 +8,7 @@ test('re-generating terrain produces full layouts and changes the arrangement', 
 
   const initialSignature = await studio.getLayoutSignature();
 
-  await page.getByRole('button', { name: /re-generate terrain/i }).click();
+  await page.getByRole('button', { name: /^re-generate$/i }).click();
   await expect(page.getByText(/generated \d+ terrain pieces using/i)).toBeVisible();
 
   const firstCount = await studio.pieceCount();
@@ -18,7 +18,7 @@ test('re-generating terrain produces full layouts and changes the arrangement', 
   expect(firstCount).toBeLessThanOrEqual(15);
   expect(firstSignature).not.toBe(initialSignature);
 
-  await page.getByRole('button', { name: /re-generate terrain/i }).click();
+  await page.getByRole('button', { name: /^re-generate$/i }).click();
   await expect.poll(async () => studio.getLayoutSignature()).not.toBe(firstSignature);
 
   const secondCount = await studio.pieceCount();

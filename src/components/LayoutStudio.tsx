@@ -357,6 +357,8 @@ export function LayoutStudio() {
   const [isExporting, setIsExporting] = useState(false);
   const [libraryDragActive, setLibraryDragActive] = useState(false);
   const [losCheckState, setLosCheckState] = useState<LosCheckState>({ status: 'idle' });
+  const [autoPlacementOpen, setAutoPlacementOpen] = useState(false);
+  const [generateTrigger, setGenerateTrigger] = useState(0);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const cleanSvgRef = useRef<SVGSVGElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
@@ -1459,72 +1461,74 @@ export function LayoutStudio() {
 
 
 
-      <section className="screen-only grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start">
-        <div className="flex min-w-0 flex-col gap-6">
-          <section
-            data-testid="interactive-map-panel"
-            className="rounded-3xl border border-white/10 bg-slate-900/65 p-4 shadow-xl shadow-slate-950/20 sm:p-6 xl:flex xl:min-h-[36rem] xl:flex-col"
-          >
-            <StatsBar
-              screenLegend={screenLegend}
-              pieceCount={layout.pieces.length}
-              deploymentDepthInches={layout.table.deploymentDepthInches}
-              pieces={layout.pieces}
-              tableWidthInches={layout.table.widthInches}
-              tableHeightInches={layout.table.heightInches}
-              validation={layout.oprValidation}
-              losCheckState={losCheckState}
-              onRunLosCheck={handleRunLosCheck}
-              onClearLosCheck={handleClearLosCheck}
-            />
-
-            <div className="overflow-hidden rounded-3xl border border-white/10 bg-slate-950/70 p-3 shadow-inner shadow-slate-950/30 sm:p-4 xl:flex-1">
-              <TableCanvas
-                widthInches={layout.table.widthInches}
-                heightInches={layout.table.heightInches}
-                deploymentDepthInches={layout.table.deploymentDepthInches}
-                title={layout.table.title}
-                pieces={layout.pieces}
-                selectedPieceId={selectedPieceId}
-                svgRef={svgRef}
-                libraryDragActive={libraryDragActive}
-                clearSightlines={activeLosSightlines}
-                onCanvasMouseDown={handleCanvasMouseDown}
-                onCanvasDragOver={handleCanvasDragOver}
-                onCanvasDrop={handleCanvasDrop}
-                onPiecePointerDown={handlePiecePointerDown}
-                onPieceSelect={setSelectedPieceId}
-                onRotateHandleMouseDown={handleRotateHandleMouseDown}
-              />
-            </div>
-
-            <div className="mt-6 rounded-3xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-400">
-              Click a terrain piece to highlight it. Drag selected terrain to reposition it, and use
-              the on-canvas rotation handle for non-round pieces.
-            </div>
-          </section>
-
-          <TerrainPaletteTable
-            presets={resolvedPresets}
-            customPieces={customPieces}
-            onAddCustom={handleAddCustomPiece}
-            onEditPiece={handleEditPiece}
-            onDeleteCustom={handleDeleteCustomPiece}
-            onDuplicatePiece={handleDuplicatePiece}
-            onAddPieceToLayout={handleAddPiece}
-          />
-        </div>
-
-        <aside data-testid="studio-sidebar" className="flex flex-col gap-6 xl:w-[22rem] xl:max-w-[22rem]">
-          <AutoPlacementGenerator
-            widthInches={layout.table.widthInches}
-            heightInches={layout.table.heightInches}
+      <section className="screen-only flex flex-col gap-6">
+        <section
+          data-testid="interactive-map-panel"
+          className="rounded-3xl border border-white/10 bg-slate-900/65 p-4 shadow-xl shadow-slate-950/20 sm:p-6 xl:flex xl:min-h-[36rem] xl:flex-col"
+        >
+          <StatsBar
+            screenLegend={screenLegend}
+            pieceCount={layout.pieces.length}
             deploymentDepthInches={layout.table.deploymentDepthInches}
-            onLayoutGenerated={handleLayoutGenerated}
-            initialConfig={layout.placementConfig}
+            pieces={layout.pieces}
+            tableWidthInches={layout.table.widthInches}
+            tableHeightInches={layout.table.heightInches}
+            validation={layout.oprValidation}
+            losCheckState={losCheckState}
+            onRunLosCheck={handleRunLosCheck}
+            onClearLosCheck={handleClearLosCheck}
+            onGenerate={() => setGenerateTrigger((n) => n + 1)}
+            onOpenAutoPlacement={() => setAutoPlacementOpen(true)}
             hasExistingPieces={layout.pieces.length > 0}
           />
-        </aside>
+
+          <div className="overflow-hidden rounded-3xl border border-white/10 bg-slate-950/70 p-3 shadow-inner shadow-slate-950/30 sm:p-4 xl:flex-1">
+            <TableCanvas
+              widthInches={layout.table.widthInches}
+              heightInches={layout.table.heightInches}
+              deploymentDepthInches={layout.table.deploymentDepthInches}
+              title={layout.table.title}
+              pieces={layout.pieces}
+              selectedPieceId={selectedPieceId}
+              svgRef={svgRef}
+              libraryDragActive={libraryDragActive}
+              clearSightlines={activeLosSightlines}
+              onCanvasMouseDown={handleCanvasMouseDown}
+              onCanvasDragOver={handleCanvasDragOver}
+              onCanvasDrop={handleCanvasDrop}
+              onPiecePointerDown={handlePiecePointerDown}
+              onPieceSelect={setSelectedPieceId}
+              onRotateHandleMouseDown={handleRotateHandleMouseDown}
+            />
+          </div>
+
+          <div className="mt-6 rounded-3xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-400">
+            Click a terrain piece to highlight it. Drag selected terrain to reposition it, and use
+            the on-canvas rotation handle for non-round pieces.
+          </div>
+        </section>
+
+        <TerrainPaletteTable
+          presets={resolvedPresets}
+          customPieces={customPieces}
+          onAddCustom={handleAddCustomPiece}
+          onEditPiece={handleEditPiece}
+          onDeleteCustom={handleDeleteCustomPiece}
+          onDuplicatePiece={handleDuplicatePiece}
+          onAddPieceToLayout={handleAddPiece}
+        />
+
+        <AutoPlacementGenerator
+          widthInches={layout.table.widthInches}
+          heightInches={layout.table.heightInches}
+          deploymentDepthInches={layout.table.deploymentDepthInches}
+          onLayoutGenerated={handleLayoutGenerated}
+          initialConfig={layout.placementConfig}
+          hasExistingPieces={layout.pieces.length > 0}
+          open={autoPlacementOpen}
+          onClose={() => setAutoPlacementOpen(false)}
+          generateTrigger={generateTrigger}
+        />
       </section>
 
       <section

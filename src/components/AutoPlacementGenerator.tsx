@@ -7,6 +7,7 @@ import type {
   PlacementStrategy,
   TerrainLayout,
 } from '../terrain/types';
+import { Modal } from './Modal';
 
 interface AutoPlacementGeneratorProps {
   widthInches: number;
@@ -15,6 +16,10 @@ interface AutoPlacementGeneratorProps {
   onLayoutGenerated: (layout: TerrainLayout) => void;
   initialConfig?: PlacementConfig;
   hasExistingPieces?: boolean;
+  open: boolean;
+  onClose: () => void;
+  /** When set, triggers generation immediately with current settings (incremented externally). */
+  generateTrigger?: number;
 }
 
 const STRATEGY_OPTIONS: Array<{ value: PlacementStrategy; label: string }> = [
@@ -75,6 +80,9 @@ export function AutoPlacementGenerator({
   onLayoutGenerated,
   initialConfig,
   hasExistingPieces,
+  open,
+  onClose,
+  generateTrigger,
 }: AutoPlacementGeneratorProps) {
   const [placementConfig, setPlacementConfig] = useState<PlacementConfig>(initialConfig || {
     strategy: 'random',
@@ -104,7 +112,7 @@ export function AutoPlacementGenerator({
     setTargetPieceCount((current) => clamp(current, recommendedPieceRange.min, recommendedPieceRange.max));
   }, [recommendedPieceRange]);
 
-  const handleGenerate = () => {
+  const runGenerate = () => {
     setIsGenerating(true);
     setError(null);
 
@@ -127,20 +135,24 @@ export function AutoPlacementGenerator({
     }
   };
 
+  // External generate trigger from the split button
+  useEffect(() => {
+    if (generateTrigger && generateTrigger > 0) {
+      runGenerate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generateTrigger]);
+
+  const handleGenerateAndClose = () => {
+    runGenerate();
+    onClose();
+  };
+
   const currentStrategyDescription = getStrategyDescription(placementConfig.strategy || 'random');
 
   return (
-    <section data-testid="auto-placement-panel" className="rounded-3xl border border-white/10 bg-slate-900/70 p-5 shadow-xl">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-white">Auto placement</h2>
-          <p className="mt-1 text-sm text-slate-300">
-            Configure and generate terrain layouts with different strategies.
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-5 space-y-4">
+    <Modal open={open} onClose={onClose} title="Auto Placement Settings">
+      <div data-testid="auto-placement-panel" className="space-y-4">
         <div className="flex flex-col gap-2">
           <label className="text-sm font-medium text-slate-200">Placement Strategy</label>
           <select
@@ -275,7 +287,7 @@ export function AutoPlacementGenerator({
         <div className="flex gap-3 pt-2">
           <button
             type="button"
-            onClick={handleGenerate}
+            onClick={handleGenerateAndClose}
             disabled={isGenerating}
             className="flex-1 rounded-2xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -289,6 +301,6 @@ export function AutoPlacementGenerator({
           </div>
         )}
       </div>
-    </section>
+    </Modal>
   );
 }
