@@ -551,4 +551,46 @@ describe('LayoutStudio', () => {
       expect(interactiveCanvas.querySelectorAll('[data-testid="los-clear-sightline"]')).toHaveLength(0);
     });
   });
+
+  it('auto-recalculates LoS sightlines when terrain is added while LoS is active', async () => {
+    const openLayout = createDefaultLayout();
+    openLayout.table = {
+      ...openLayout.table,
+      widthInches: 24,
+      heightInches: 24,
+      deploymentDepthInches: 6,
+      title: 'Open Table',
+    };
+    openLayout.pieces = [];
+    window.history.replaceState(window.history.state, '', `/#${encodeLayoutHash(openLayout)}`);
+
+    render(<LayoutStudio />);
+
+    const losContainer = screen.getByText('LoS Check').parentElement!;
+    const losCheckbox = within(losContainer).getByRole('checkbox');
+
+    fireEvent.click(losCheckbox);
+
+    const [interactiveCanvas] = screen.getAllByTestId('table-canvas-svg');
+
+    // Wait for initial computation (open table = 625 clear sightlines on 24x24)
+    await waitFor(() => {
+      expect(interactiveCanvas.querySelectorAll('[data-testid="los-clear-sightline"]')).toHaveLength(625);
+    });
+
+    // Add a terrain piece — this changes the layout while LoS is active
+    const libraryItem = screen.getByTestId('library-item-ruins');
+    fireEvent.click(within(libraryItem).getByRole('button', { name: /add/i }));
+
+    // Sightlines should auto-recalculate (debounced 300ms) without toggling LoS off/on
+    await waitFor(
+      () => {
+        const sightlines = interactiveCanvas.querySelectorAll('[data-testid="los-clear-sightline"]');
+        // Adding a piece should reduce the number of clear sightlines
+        expect(sightlines.length).toBeGreaterThan(0);
+        expect(sightlines.length).toBeLessThan(625);
+      },
+      { timeout: 2000 },
+    );
+  });
 });

@@ -365,6 +365,8 @@ export function LayoutStudio() {
   const customPiecesRef = useRef(customPieces);
   const losCheckCacheRef = useRef<{ key: string; result: EdgeToEdgeSightlineResult } | null>(null);
   const losCheckRunIdRef = useRef(0);
+  const losActiveRef = useRef(false);
+  const losRecalcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     layoutRef.current = layout;
@@ -629,6 +631,53 @@ export function LayoutStudio() {
 
       return current;
     });
+
+    // Auto-recalculate after a debounce when LOS is active
+    if (losActiveRef.current) {
+      if (losRecalcTimerRef.current !== null) {
+        clearTimeout(losRecalcTimerRef.current);
+      }
+
+      const runId = losCheckRunIdRef.current;
+
+      losRecalcTimerRef.current = setTimeout(() => {
+        losRecalcTimerRef.current = null;
+
+        if (!losActiveRef.current || losCheckRunIdRef.current !== runId) {
+          return;
+        }
+
+        setLosCheckState({ status: 'loading' });
+
+        // Yield to the browser before computing
+        setTimeout(() => {
+          if (!losActiveRef.current || losCheckRunIdRef.current !== runId) {
+            return;
+          }
+
+          const result = findClearEdgeToEdgeSightlinesForLayout(
+            layoutRef.current.pieces,
+            layoutRef.current.table.widthInches,
+            layoutRef.current.table.heightInches,
+          );
+          const cacheKey = serializeLayoutForLosCache(layoutRef.current);
+
+          if (!losActiveRef.current || losCheckRunIdRef.current !== runId) {
+            return;
+          }
+
+          losCheckCacheRef.current = { key: cacheKey, result };
+          setLosCheckState({ status: 'done', result });
+        }, 0);
+      }, 300);
+    }
+
+    return () => {
+      if (losRecalcTimerRef.current !== null) {
+        clearTimeout(losRecalcTimerRef.current);
+        losRecalcTimerRef.current = null;
+      }
+    };
   }, [losCheckCacheKey]);
 
   const resolvedPresets = useMemo(
@@ -932,6 +981,8 @@ export function LayoutStudio() {
   };
 
   const handleRunLosCheck = async () => {
+    losActiveRef.current = true;
+
     if (losCheckCacheRef.current?.key === losCheckCacheKey) {
       setLosCheckState({
         status: 'done',
@@ -969,6 +1020,7 @@ export function LayoutStudio() {
   };
 
   const handleClearLosCheck = () => {
+    losActiveRef.current = false;
     losCheckRunIdRef.current += 1;
     setLosCheckState({ status: 'idle' });
   };
